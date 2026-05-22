@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Butler Coffee — Coffee Database</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ─── TOKENS ─────────────────────────────── */
+    :root {
+      --sidebar-w: 220px;
+      --black:     #111111;
+      --surf:      #ffffff;
+      --bg:        #f4f4f0;
+      --border:    #e5e4df;
+      --border-2:  #d0cfca;
+      --text:      #111111;
+      --muted:     #777770;
+      --subtle:    #aaa;
+      --yellow:    #FFE500;
+      --yellow-bg: #fffbe6;
+      --yellow-bd: #f0d900;
+      --green:     #16a34a;
+      --green-bg:  #f0fdf4;
+      --red:       #dc2626;
+      --red-bg:    #fef2f2;
+      --blue:      #2563eb;
+
+      --font-head: 'Nunito', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --r:  8px;
+      --r2: 12px;
+      --ease: 0.15s ease;
+    }
+
+    /* ─── RESET ──────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-body);
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      display: flex;
+      min-height: 100vh;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    input, select, textarea, button { font-family: inherit; font-size: inherit; }
+    a { color: inherit; text-decoration: none; }
+    ul { list-style: none; }
+
+    /* ─── SIDEBAR ────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--black);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      z-index: 100;
+      overflow-y: auto;
+    }
+    .sidebar__brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 20px 18px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .sidebar__brand img { height: 30px; width: auto; }
+    .sidebar__brand-text { line-height: 1.2; }
+    .sidebar__brand-name {
+      font-family: var(--font-head);
+      font-weight: 900;
+      font-size: 0.9rem;
+      color: #fff;
+    }
+    .sidebar__brand-sub {
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.4);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .sidebar__nav { padding: 12px 10px; flex: 1; }
+    .nav-section {
+      margin-bottom: 20px;
+    }
+    .nav-section__label {
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      padding: 0 8px;
+      margin-bottom: 4px;
+    }
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 10px;
+      border-radius: var(--r);
+      color: rgba(255,255,255,0.55);
+      font-weight: 500;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all var(--ease);
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+    .nav-link:hover { color: #fff; background: rgba(255,255,255,0.07); }
+    .nav-link.active { color: #fff; background: rgba(255,229,0,0.15); }
+    .nav-link.active .nav-link__icon { color: var(--yellow); }
+    .nav-link__icon { font-size: 0.95rem; width: 18px; text-align: center; }
+    .nav-link__badge {
+      margin-left: auto;
+      font-size: 0.6rem;
+      background: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.35);
+      padding: 2px 6px;
+      border-radius: 20px;
+    }
+    .nav-link--soon { opacity: 0.4; cursor: not-allowed; }
+    .nav-link--soon:hover { background: none; color: rgba(255,255,255,0.55); }
+
+    .sidebar__footer {
+      padding: 12px 10px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .sidebar__footer a {
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.35);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+    }
+    .sidebar__footer a:hover { color: rgba(255,255,255,0.7); }
+
+    /* ─── MAIN ───────────────────────────────── */
+    .main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* ─── TOPBAR ─────────────────────────────── */
+    .topbar {
+      background: var(--surf);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .topbar__left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .topbar__title {
+      font-family: var(--font-head);
+      font-weight: 800;
+      font-size: 1.05rem;
+      color: var(--text);
+    }
+    .topbar__count {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2px 9px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .topbar__right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ─── BUTTONS ────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 0.8rem;
+      letter-spacing: 0.02em;
+      padding: 8px 16px;
+      border-radius: var(--r);
+      border: none;
+      cursor: pointer;
+      transition: all var(--ease);
+      white-space: nowrap;
+    }
+    .btn--primary { background: var(--black); color: #fff; }
+    .btn--primary:hover { background: #222; }
+    .btn--yellow  { background: var(--yellow); color: var(--black); }
+    .btn--yellow:hover  { background: #f0d800; }
+    .btn--ghost   { background: transparent; color: var(--text); border: 1px solid var(--border-2); }
+    .btn--ghost:hover   { border-color: #aaa; background: var(--bg); }
+    .btn--danger  { background: var(--red-bg); color: var(--red); border: 1px solid #fecaca; }
+    .btn--danger:hover  { background: #fee2e2; }
+    .btn--sm { padding: 6px 12px; font-size: 0.75rem; }
+    .btn--icon { padding: 6px 8px; }
+
+    /* ─── CONTENT AREA ───────────────────────── */
+    .content { padding: 24px 28px; flex: 1; }
+
+    /* ─── TOOLBAR ────────────────────────────── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    .search-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 200px;
+      max-width: 320px;
+    }
+    .search-wrap__icon {
+      position: absolute;
+      left: 10px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--subtle);
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+    .search-input {
+      width: 100%;
+      padding: 8px 10px 8px 32px;
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background: var(--surf);
+      color: var(--text);
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color var(--ease);
+    }
+    .search-input:focus { border-color: var(--black); }
+
+    .filter-select {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background: var(--surf);
+      color: var(--text);
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+    .filter-select:focus { border-color: var(--black); }
+
+    .toolbar__right { margin-left: auto; display: flex; gap: 8px; }
+
+    /* ─── TABLE ──────────────────────────────── */
+    .table-wrap {
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: var(--r2);
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      text-align: left;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 11px 16px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background var(--ease);
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #fafaf8; }
+    td {
+      padding: 12px 16px;
+      font-size: 0.85rem;
+      vertical-align: middle;
+    }
+    .td-name {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+    .td-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+    .td-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    /* level badges */
+    .level-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .level--base    { background: #fef3c7; color: #92400e; }
+    .level--explorer { background: #dbeafe; color: #1e40af; }
+    .level--alpine  { background: #dcfce7; color: #166534; }
+    .level--summit  { background: #f3e8ff; color: #6b21a8; }
+    .level--decaf   { background: #f1f5f9; color: #475569; }
+    .level--single  { background: #fef2f2; color: #991b1b; }
+
+    /* sizes chips */
+    .size-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+    .size-chip {
+      font-size: 0.65rem;
+      font-weight: 600;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      color: var(--muted);
+    }
+
+    /* empty state */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .empty-state__icon { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.4; }
+    .empty-state__title { font-family: var(--font-head); font-weight: 700; font-size: 1rem; color: var(--text); margin-bottom: 6px; }
+    .empty-state__text { font-size: 0.85rem; }
+
+    /* ─── FORM PANEL ─────────────────────────── */
+    .form-panel { display: none; }
+    .form-panel.active { display: block; }
+
+    .form-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .form-header__back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px 0;
+      transition: color var(--ease);
+    }
+    .form-header__back:hover { color: var(--text); }
+    .form-header__title {
+      font-family: var(--font-head);
+      font-weight: 900;
+      font-size: 1.3rem;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 1000px) {
+      .form-grid { grid-template-columns: 1fr; }
+    }
+
+    /* cards */
+    .card {
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: var(--r2);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .card:last-child { margin-bottom: 0; }
+    .card__header {
+      padding: 14px 20px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card__title {
+      font-family: var(--font-head);
+      font-weight: 800;
+      font-size: 0.85rem;
+    }
+    .card__icon { font-size: 0.9rem; }
+    .card__body { padding: 18px 20px; }
+
+    /* form fields */
+    .field { margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    label .req { color: var(--red); margin-left: 2px; }
+    .input, .select-input, .textarea-input {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background: var(--surf);
+      color: var(--text);
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color var(--ease), box-shadow var(--ease);
+    }
+    .input:focus, .select-input:focus, .textarea-input:focus {
+      border-color: var(--black);
+      box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
+    }
+    .textarea-input { resize: vertical; min-height: 90px; }
+    .input--mono { font-family: 'Courier New', monospace; font-size: 0.82rem; background: var(--bg); }
+    .field-hint {
+      font-size: 0.71rem;
+      color: var(--subtle);
+      margin-top: 4px;
+    }
+
+    /* slug row */
+    .slug-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .slug-prefix {
+      font-size: 0.78rem;
+      color: var(--subtle);
+      white-space: nowrap;
+      padding: 9px 0;
+    }
+    .slug-row .input { flex: 1; }
+    .slug-regen {
+      flex-shrink: 0;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      color: var(--muted);
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: all var(--ease);
+    }
+    .slug-regen:hover { border-color: #aaa; color: var(--text); }
+
+    /* checkbox group */
+    .check-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .check-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .check-item input[type="checkbox"] {
+      width: 15px; height: 15px;
+      accent-color: var(--black);
+      cursor: pointer;
+    }
+
+    /* image field */
+    .img-preview {
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+      position: relative;
+    }
+    .img-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .img-preview__empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      color: var(--subtle);
+      font-size: 0.78rem;
+    }
+    .img-preview__empty-icon { font-size: 2rem; opacity: 0.3; }
+
+    /* form actions */
+    .form-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 16px 20px;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      border-radius: 0 0 var(--r2) var(--r2);
+    }
+    .form-actions__spacer { flex: 1; }
+
+    /* ─── TOAST ──────────────────────────────── */
+    .toast-wrap {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 999;
+      pointer-events: none;
+    }
+    .toast {
+      background: var(--black);
+      color: #fff;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 10px 16px;
+      border-radius: var(--r);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      animation: slideIn 0.2s ease, fadeOut 0.3s ease 2.5s forwards;
+      pointer-events: all;
+    }
+    .toast--success .toast__icon { color: #4ade80; }
+    .toast--error   .toast__icon { color: #f87171; }
+    @keyframes slideIn  { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes fadeOut  { to { opacity: 0; transform: translateY(6px); } }
+
+    /* ─── LOADING OVERLAY ───────────────────── */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(244,244,240,0.75);
+      backdrop-filter: blur(2px);
+      z-index: 800;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .loading-spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--black);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    .loading-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── CONFIRM DIALOG ─────────────────────── */
+    .dialog-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+    }
+    .dialog-overlay.open { display: flex; }
+    .dialog {
+      background: var(--surf);
+      border-radius: var(--r2);
+      padding: 28px 28px 22px;
+      max-width: 380px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .dialog__title { font-family: var(--font-head); font-weight: 900; font-size: 1.05rem; margin-bottom: 8px; }
+    .dialog__text  { font-size: 0.875rem; color: var(--muted); margin-bottom: 22px; line-height: 1.6; }
+    .dialog__actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* ─── STATS BAR ──────────────────────────── */
+    .stats-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    .stat-pill {
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .stat-pill strong { color: var(--text); }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════
+       SIDEBAR
+  ═══════════════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar__brand">
+      <img src="https://drive.google.com/uc?export=view&id=1BrvJTmLjnaUQ6feC6NkSvET6SouIkCQK"
+           alt="Butler Coffee"
+           onerror="this.style.display='none'">
+      <div class="sidebar__brand-text">
+        <div class="sidebar__brand-name">Butler Coffee</div>
+        <div class="sidebar__brand-sub">Admin DB</div>
+      </div>
+    </div>
+
+    <nav class="sidebar__nav">
+      <div class="nav-section">
+        <div class="nav-section__label">Catalog</div>
+        <button class="nav-link active" onclick="showSection('coffee')">
+          <span class="nav-link__icon">☕</span> Coffee
+          <span class="nav-link__badge" id="coffee-count">0</span>
+        </button>
+        <button class="nav-link nav-link--soon" title="Coming soon">
+          <span class="nav-link__icon">⚙️</span> Machines
+          <span class="nav-link__badge">soon</span>
+        </button>
+        <button class="nav-link nav-link--soon" title="Coming soon">
+          <span class="nav-link__icon">✍️</span> Blog
+          <span class="nav-link__badge">soon</span>
+        </button>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section__label">Tools</div>
+        <button class="nav-link" onclick="syncFromSheet()">
+          <span class="nav-link__icon">🔄</span> Sync from Sheet
+        </button>
+        <button class="nav-link" onclick="exportCSV()">
+          <span class="nav-link__icon">⬇️</span> Export CSV
+        </button>
+        <button class="nav-link" onclick="document.getElementById('import-file').click()">
+          <span class="nav-link__icon">⬆️</span> Import CSV
+        </button>
+        <input type="file" id="import-file" accept=".csv" style="display:none" onchange="importCSV(event)">
+      </div>
+    </nav>
+
+    <div class="sidebar__footer">
+      <a href="../index.html" target="_blank">← View public site</a>
+    </div>
+  </aside>
+
+
+  <!-- ═══════════════════════════════════════
+       MAIN
+  ═══════════════════════════════════════ -->
+  <div class="main">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div class="topbar__left">
+        <span class="topbar__title" id="topbar-title">Coffee</span>
+        <span class="topbar__count" id="topbar-count">0 entries</span>
+      </div>
+      <div class="topbar__right">
+        <button class="btn btn--primary" id="add-btn" onclick="openForm(null)">
+          + Add Coffee
+        </button>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- ── LIST PANEL ──────────────────── -->
+      <div id="list-panel">
+
+        <!-- Stats -->
+        <div class="stats-row" id="stats-row"></div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+          <div class="search-wrap">
+            <span class="search-wrap__icon">🔍</span>
+            <input class="search-input" type="search" placeholder="Search coffees…" id="search-input" oninput="renderList()">
+          </div>
+          <select class="filter-select" id="level-filter" onchange="renderList()">
+            <option value="">All levels</option>
+            <option value="Base Coffee">Base</option>
+            <option value="Explorer Coffee">Explorer</option>
+            <option value="Alpine Coffee">Alpine</option>
+            <option value="Summit Coffee">Summit</option>
+            <option value="Decaf Coffee">Decaf</option>
+            <option value="SINGLE ORDER ONLY">Single Order</option>
+          </select>
+          <select class="filter-select" id="roaster-filter" onchange="renderList()">
+            <option value="">All roasters</option>
+            <option value="DABOV Specialty Coffee">DABOV Specialty Coffee</option>
+          </select>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:30%">Coffee</th>
+                <th>Level</th>
+                <th>Process</th>
+                <th>Origin</th>
+                <th>Sizes</th>
+                <th style="width:100px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+            </tbody>
+          </table>
+          <div id="empty-state" class="empty-state" style="display:none">
+            <div class="empty-state__icon">☕</div>
+            <div class="empty-state__title">No coffees yet</div>
+            <div class="empty-state__text">Click "Add Coffee" to add your first entry.</div>
+          </div>
+        </div>
+
+      </div><!-- /list-panel -->
+
+
+      <!-- ── FORM PANEL ──────────────────── -->
+      <div id="form-panel" class="form-panel">
+
+        <div class="form-header">
+          <button class="form-header__back" onclick="closeForm()">← Back</button>
+          <h1 class="form-header__title" id="form-title">New Coffee</h1>
+        </div>
+
+        <form id="coffee-form" onsubmit="saveCoffee(event)">
+          <input type="hidden" id="f-id">
+
+          <div class="form-grid">
+
+            <!-- LEFT: Main fields -->
+            <div>
+
+              <!-- Identity -->
+              <div class="card">
+                <div class="card__header">
+                  <span class="card__icon">✏️</span>
+                  <span class="card__title">Identity</span>
+                </div>
+                <div class="card__body">
+                  <div class="field">
+                    <label>Coffee Name <span class="req">*</span></label>
+                    <input class="input" type="text" id="f-name" placeholder="e.g. House Brazil" required oninput="onNameChange()">
+                  </div>
+                  <div class="field">
+                    <label>Subtitle</label>
+                    <input class="input" type="text" id="f-subtitle" placeholder="e.g. A coffee with no off notes">
+                  </div>
+                  <div class="field">
+                    <label>Slug</label>
+                    <div class="slug-row">
+                      <span class="slug-prefix">/coffee/</span>
+                      <input class="input input--mono" type="text" id="f-slug" placeholder="house-brazil">
+                      <button type="button" class="slug-regen" onclick="regenSlug()" title="Regenerate from name">↺</button>
+                    </div>
+                    <div class="field-hint">Auto-generated from Coffee Name. Edit manually if needed.</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Story -->
+              <div class="card">
+                <div class="card__header">
+                  <span class="card__icon">📖</span>
+                  <span class="card__title">Story</span>
+                </div>
+                <div class="card__body">
+                  <div class="field">
+                    <label>Description</label>
+                    <textarea class="textarea-input" id="f-description" placeholder="A coffee with no off notes. What's in the Cup…" style="min-height:110px"></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Notes (Tasting)</label>
+                    <input class="input" type="text" id="f-notes" placeholder="e.g. Cocoa, Almond, Brown Sugar">
+                    <div class="field-hint">Comma-separated tasting notes.</div>
+                  </div>
+                  <div class="field">
+                    <label>Recommended For</label>
+                    <input class="input" type="text" id="f-recommended" placeholder="e.g. Espresso, Cezve, Filter">
+                    <div class="field-hint">Comma-separated brew methods.</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Origin -->
+              <div class="card">
+                <div class="card__header">
+                  <span class="card__icon">🌍</span>
+                  <span class="card__title">Origin</span>
+                </div>
+                <div class="card__body">
+                  <div class="field-row">
+                    <div class="field">
+                      <label>Country / Origin</label>
+                      <input class="input" type="text" id="f-origin" placeholder="e.g. Brazil">
+                    </div>
+                    <div class="field">
+                      <label>Region</label>
+                      <input class="input" type="text" id="f-region" placeholder="e.g. Minas Gerais">
+                    </div>
+                  </div>
+                  <div class="field-row">
+                    <div class="field">
+                      <label>Farm</label>
+                      <input class="input" type="text" id="f-farm" placeholder="e.g. Fazenda Serra Negra">
+                    </div>
+                    <div class="field">
+                      <label>Farmer</label>
+                      <input class="input" type="text" id="f-farmer" placeholder="e.g. João Silva">
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label>Altitude (m)</label>
+                    <input class="input" type="text" id="f-altitude" placeholder="e.g. 1200–1500">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Coffee Details -->
+              <div class="card">
+                <div class="card__header">
+                  <span class="card__icon">🔬</span>
+                  <span class="card__title">Coffee Details</span>
+                </div>
+                <div class="card__body">
+                  <div class="field-row">
+                    <div class="field">
+                      <label>Variety</label>
+                      <input class="input" type="text" id="f-variety" placeholder="e.g. Bourbon, Caturra">
+                    </div>
+                    <div class="field">
+                      <label>Process</label>
+                      <input class="input" type="text" id="f-process" placeholder="e.g. Natural, Washed">
+                    </div>
+                  </div>
+                  <div class="field-row">
+                    <div class="field">
+                      <label>Roast</label>
+                      <input class="input" type="text" id="f-roast" placeholder="e.g. Light, Medium">
+                    </div>
+                    <div class="field">
+                      <label>Roasted By</label>
+                      <select class="select-input" id="f-roaster">
+                        <option value="">— Select roaster —</option>
+                        <option value="DABOV Specialty Coffee">DABOV Specialty Coffee</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div><!-- /left -->
+
+
+            <!-- RIGHT: Sidebar fields -->
+            <div>
+
+              <!-- Subscription -->
+              <div class="card">
+                <div class="card__header">
+                  <span class="card__icon">📦</span>
+                  <span class="card__title">Subscription</span>
+                </div>
+                <div class="card__body">
+                  <div class="field">
+                    <label>Subscription Level <span class="req">*</span></label>
+                    <select class="select-input" id="f-level" required>
+                      <option value="">— Select level —</option>
+                      <option value="Base Coffee">Base Coffee</option>
+                      <option value="Explorer Coffee">Explorer Coffee</option>
+                      <option value="Alpine Coffee">Alpine Coffee</option>
+                      <option value="Summit Coffee">Summit Coffee</option>
+                      <option value="Decaf Coffee">Decaf Coffee</option>
+                      <option value="SINGLE ORDER ONLY">Single Order Only</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>Bag Sizes</label>
+                    <div class="check-group">
+                      <label class="check-item">
+                        <input type="checkbox" name="bag-size" value="250g"> 250g
+                      </label>
+                      <label class="check-item">
+                        <input type="checkbox" name="bag-size" value="500g"> 500g
+                      </label>
+                      <label class="check-item">
+                        <input type="checkbox" name="bag-size" value="1kg"> 1kg
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Image -->
+              <div class="card">
+                <div class="card__header">
+                  <span class="card__icon">🖼️</span>
+                  <span class="card__title">Image</span>
+                </div>
+                <div class="card__body">
+                  <div class="img-preview" id="img-preview">
+                    <div class="img-preview__empty">
+                      <div class="img-preview__empty-icon">🖼️</div>
+                      <span>No image</span>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label>Image URL</label>
+                    <input class="input input--mono" type="url" id="f-image"
+                           placeholder="https://drive.google.com/uc?export=view&id=…"
+                           oninput="updateImagePreview()">
+                    <div class="field-hint">Google Drive export URL or direct image URL. Default account: desiyvalles21.</div>
+                  </div>
+                </div>
+                <div class="form-actions" style="background:none;border-top:1px solid var(--border)">
+                  <button type="button" class="btn btn--ghost btn--sm" onclick="loadDefaultImage()">Use default image</button>
+                </div>
+              </div>
+
+              <!-- Save card -->
+              <div class="card">
+                <div class="form-actions">
+                  <button type="button" class="btn btn--ghost btn--sm" id="delete-btn" onclick="confirmDelete()" style="display:none;color:var(--red)">Delete</button>
+                  <div class="form-actions__spacer"></div>
+                  <button type="button" class="btn btn--ghost btn--sm" onclick="closeForm()">Cancel</button>
+                  <button type="submit" class="btn btn--primary">Save Coffee</button>
+                </div>
+              </div>
+
+            </div><!-- /right -->
+
+          </div><!-- /form-grid -->
+        </form>
+
+      </div><!-- /form-panel -->
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+
+
+  <!-- ═══════════════════════════════════════
+       TOAST
+  ═══════════════════════════════════════ -->
+  <!-- LOADING OVERLAY -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-label">Syncing with Google Sheet…</div>
+  </div>
+
+  <div class="toast-wrap" id="toast-wrap"></div>
+
+
+  <!-- ═══════════════════════════════════════
+       DELETE DIALOG
+  ═══════════════════════════════════════ -->
+  <div class="dialog-overlay" id="delete-dialog">
+    <div class="dialog">
+      <div class="dialog__title">Delete this coffee?</div>
+      <div class="dialog__text">This will permanently remove the entry from the database. This action cannot be undone.</div>
+      <div class="dialog__actions">
+        <button class="btn btn--ghost btn--sm" onclick="closeDialog()">Cancel</button>
+        <button class="btn btn--danger btn--sm" onclick="deleteCurrent()">Yes, delete</button>
+      </div>
+    </div>
+  </div>
+
+
+  <script>
+  /* ═══════════════════════════════════════════
+     CONFIG
+     Paste your Apps Script Web App URL here after deploying Code.gs.
+     Extensions → Apps Script → Deploy → New Deployment
+       Type: Web app | Execute as: Me | Who has access: Anyone
+  ═══════════════════════════════════════════ */
+  const API_URL = 'https://script.google.com/macros/s/AKfycbyQkvdBvweOs0d8SPfwQeFY1VaWhMJf0qBr6pDg0I9ruslv2NxUTi0wtFQfs0JkDPk-/exec';
+
+  /* ═══════════════════════════════════════════
+     DATA LAYER — Google Sheets via Apps Script
+  ═══════════════════════════════════════════ */
+  let _cache = [];   // in-memory mirror of the Sheet
+
+  // All API calls use text/plain body to avoid CORS preflight on POST
+  async function apiCall(method, body) {
+    const opts = { method, redirect: 'follow' };
+    if (body) {
+      opts.headers = { 'Content-Type': 'text/plain' };
+      opts.body = JSON.stringify(body);
+    }
+    const res  = await fetch(API_URL, opts);
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'API error');
+    return json.data;
+  }
+
+  async function loadFromSheet() {
+    setLoading(true);
+    try {
+      const data = await apiCall('GET');
+      _cache = Array.isArray(data) ? data : [];
+      refreshCounts();
+    } catch(err) {
+      toast('Could not connect to Sheet — check API_URL in code.', 'error');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function getAll()    { return _cache; }
+  function getById(id) { return _cache.find(c => c.id === id) || null; }
+
+  async function upsertToSheet(coffee) {
+    const saved = await apiCall('POST', { action: 'save', coffee });
+    const idx = _cache.findIndex(c => c.id === saved.id);
+    if (idx >= 0) _cache[idx] = saved;
+    else _cache.unshift(saved);
+    refreshCounts();
+    return saved;
+  }
+
+  async function removeFromSheet(id) {
+    await apiCall('POST', { action: 'delete', id });
+    _cache = _cache.filter(c => c.id !== id);
+    refreshCounts();
+  }
+
+  function newId() {
+    return 'bc_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+  }
+
+  function setLoading(on) {
+    document.getElementById('loading-overlay').style.display = on ? 'flex' : 'none';
+  }
+
+  /* ═══════════════════════════════════════════
+     SLUG
+  ═══════════════════════════════════════════ */
+  function toSlug(str) {
+    return str.toLowerCase()
+      .replace(/[àáâãäå]/g,'a').replace(/[èéêë]/g,'e')
+      .replace(/[ìíîï]/g,'i').replace(/[òóôõö]/g,'o')
+      .replace(/[ùúûü]/g,'u').replace(/ñ/g,'n').replace(/ç/g,'c')
+      .replace(/[^a-z0-9\s-]/g,'')
+      .trim().replace(/\s+/g,'-').replace(/-+/g,'-');
+  }
+
+  function onNameChange() {
+    const slug = document.getElementById('f-slug');
+    if (!slug.dataset.manual) {
+      slug.value = toSlug(document.getElementById('f-name').value);
+    }
+  }
+
+  function regenSlug() {
+    const slug = document.getElementById('f-slug');
+    slug.dataset.manual = '';
+    slug.value = toSlug(document.getElementById('f-name').value);
+  }
+
+  document.getElementById('f-slug').addEventListener('input', function() {
+    this.dataset.manual = 'true';
+  });
+
+  /* ═══════════════════════════════════════════
+     IMAGE PREVIEW
+  ═══════════════════════════════════════════ */
+  const DEFAULT_IMAGE = 'https://drive.google.com/uc?export=view&id=1BrvJTmLjnaUQ6feC6NkSvET6SouIkCQK'; // replace with desiyvalles21 default
+
+  function updateImagePreview() {
+    const url = document.getElementById('f-image').value.trim();
+    const preview = document.getElementById('img-preview');
+    if (url) {
+      preview.innerHTML = `<img src="${url}" alt="Preview" onerror="this.parentElement.innerHTML='<div class=img-preview__empty><div class=img-preview__empty-icon>⚠️</div><span>Could not load image</span></div>'">`;
+    } else {
+      preview.innerHTML = `<div class="img-preview__empty"><div class="img-preview__empty-icon">🖼️</div><span>No image</span></div>`;
+    }
+  }
+
+  function loadDefaultImage() {
+    document.getElementById('f-image').value = DEFAULT_IMAGE;
+    updateImagePreview();
+  }
+
+  /* ═══════════════════════════════════════════
+     LIST RENDER
+  ═══════════════════════════════════════════ */
+  const LEVEL_CLASSES = {
+    'Base Coffee':       'level--base',
+    'Explorer Coffee':   'level--explorer',
+    'Alpine Coffee':     'level--alpine',
+    'Summit Coffee':     'level--summit',
+    'Decaf Coffee':      'level--decaf',
+    'SINGLE ORDER ONLY': 'level--single',
+  };
+
+  function renderList() {
+    const query    = document.getElementById('search-input').value.toLowerCase();
+    const lvlFilt  = document.getElementById('level-filter').value;
+    const roastFilt= document.getElementById('roaster-filter').value;
+
+    let data = getAll();
+    if (query)     data = data.filter(c => (c.name||'').toLowerCase().includes(query) || (c.subtitle||'').toLowerCase().includes(query) || (c.origin||'').toLowerCase().includes(query));
+    if (lvlFilt)   data = data.filter(c => c.level === lvlFilt);
+    if (roastFilt) data = data.filter(c => c.roaster === roastFilt);
+
+    const tbody = document.getElementById('table-body');
+    const empty = document.getElementById('empty-state');
+
+    if (data.length === 0) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+
+    tbody.innerHTML = data.map(c => `
+      <tr>
+        <td>
+          <div class="td-name">${esc(c.name || '—')}</div>
+          ${ c.subtitle ? `<div class="td-sub">${esc(c.subtitle)}</div>` : '' }
+        </td>
+        <td>
+          ${ c.level ? `<span class="level-badge ${LEVEL_CLASSES[c.level]||''}">${esc(c.level.replace(' Coffee',''))}</span>` : '—' }
+        </td>
+        <td style="color:var(--muted);font-size:0.8rem">${esc(c.process || '—')}</td>
+        <td style="color:var(--muted);font-size:0.8rem">${esc(c.origin || '—')}</td>
+        <td>
+          <div class="size-chips">
+            ${ (c.bagSizes||[]).map(s => `<span class="size-chip">${esc(s)}</span>`).join('') || '—' }
+          </div>
+        </td>
+        <td>
+          <div class="td-actions">
+            <button class="btn btn--ghost btn--sm btn--icon" onclick="openForm('${c.id}')" title="Edit">✏️</button>
+            <button class="btn btn--ghost btn--sm btn--icon" onclick="confirmDeleteById('${c.id}')" title="Delete" style="color:var(--red)">🗑️</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function refreshCounts() {
+    const all = getAll();
+    document.getElementById('coffee-count').textContent = all.length;
+    document.getElementById('topbar-count').textContent = `${all.length} entr${all.length === 1 ? 'y' : 'ies'}`;
+    renderStats();
+    renderList();
+  }
+
+  function renderStats() {
+    const all = getAll();
+    const levels = {};
+    all.forEach(c => { levels[c.level] = (levels[c.level]||0)+1; });
+    const row = document.getElementById('stats-row');
+    row.innerHTML = Object.entries(levels).map(([k,v]) =>
+      `<div class="stat-pill"><strong>${v}</strong> ${k||'Unlabeled'}</div>`
+    ).join('') || '';
+  }
+
+  /* ═══════════════════════════════════════════
+     FORM OPEN / CLOSE
+  ═══════════════════════════════════════════ */
+  let currentId = null;
+
+  function openForm(id) {
+    currentId = id;
+    const form = document.getElementById('coffee-form');
+    form.reset();
+    document.getElementById('f-id').value = '';
+    document.getElementById('f-slug').dataset.manual = '';
+    document.getElementById('form-title').textContent = id ? 'Edit Coffee' : 'New Coffee';
+    document.getElementById('delete-btn').style.display = id ? 'block' : 'none';
+    updateImagePreview();
+
+    if (id) {
+      const c = getById(id);
+      if (c) populateForm(c);
+    }
+
+    document.getElementById('list-panel').style.display = 'none';
+    document.getElementById('form-panel').classList.add('active');
+    document.getElementById('add-btn').style.display = 'none';
+    window.scrollTo(0,0);
+  }
+
+  /* ═══════════════════════════════════════════
+     SYNC FROM SHEET
+  ═══════════════════════════════════════════ */
+  async function syncFromSheet() {
+    await loadFromSheet();
+    toast('Synced from Google Sheet!', 'success');
+  }
+
+  function closeForm() {
+    document.getElementById('list-panel').style.display = '';
+    document.getElementById('form-panel').classList.remove('active');
+    document.getElementById('add-btn').style.display = '';
+    currentId = null;
+    renderList();
+  }
+
+  function populateForm(c) {
+    document.getElementById('f-id').value         = c.id       || '';
+    document.getElementById('f-name').value       = c.name     || '';
+    document.getElementById('f-subtitle').value   = c.subtitle || '';
+    document.getElementById('f-slug').value       = c.slug     || '';
+    document.getElementById('f-slug').dataset.manual = c.slug ? 'true' : '';
+    document.getElementById('f-description').value= c.description || '';
+    document.getElementById('f-notes').value      = c.notes    || '';
+    document.getElementById('f-recommended').value= c.recommended || '';
+    document.getElementById('f-origin').value     = c.origin   || '';
+    document.getElementById('f-region').value     = c.region   || '';
+    document.getElementById('f-farm').value       = c.farm     || '';
+    document.getElementById('f-farmer').value     = c.farmer   || '';
+    document.getElementById('f-altitude').value   = c.altitude || '';
+    document.getElementById('f-variety').value    = c.variety  || '';
+    document.getElementById('f-process').value    = c.process  || '';
+    document.getElementById('f-roast').value      = c.roast    || '';
+    document.getElementById('f-roaster').value    = c.roaster  || '';
+    document.getElementById('f-level').value      = c.level    || '';
+    document.getElementById('f-image').value      = c.image    || '';
+    // bag sizes
+    document.querySelectorAll('input[name="bag-size"]').forEach(cb => {
+      cb.checked = (c.bagSizes || []).includes(cb.value);
+    });
+    updateImagePreview();
+  }
+
+  /* ═══════════════════════════════════════════
+     SAVE
+  ═══════════════════════════════════════════ */
+  async function saveCoffee(e) {
+    e.preventDefault();
+    const id = document.getElementById('f-id').value || newId();
+    const bagSizes = Array.from(document.querySelectorAll('input[name="bag-size"]:checked')).map(cb => cb.value);
+
+    const coffee = {
+      id,
+      name:        document.getElementById('f-name').value.trim(),
+      subtitle:    document.getElementById('f-subtitle').value.trim(),
+      slug:        document.getElementById('f-slug').value.trim() || toSlug(document.getElementById('f-name').value),
+      description: document.getElementById('f-description').value.trim(),
+      notes:       document.getElementById('f-notes').value.trim(),
+      recommended: document.getElementById('f-recommended').value.trim(),
+      origin:      document.getElementById('f-origin').value.trim(),
+      region:      document.getElementById('f-region').value.trim(),
+      farm:        document.getElementById('f-farm').value.trim(),
+      farmer:      document.getElementById('f-farmer').value.trim(),
+      altitude:    document.getElementById('f-altitude').value.trim(),
+      variety:     document.getElementById('f-variety').value.trim(),
+      process:     document.getElementById('f-process').value.trim(),
+      roast:       document.getElementById('f-roast').value.trim(),
+      roaster:     document.getElementById('f-roaster').value,
+      level:       document.getElementById('f-level').value,
+      bagSizes,
+      image:       document.getElementById('f-image').value.trim(),
+      updatedAt:   new Date().toISOString(),
+    };
+
+    const btn = e.target.querySelector('[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    try {
+      await upsertToSheet(coffee);
+      toast('Coffee saved!', 'success');
+      closeForm();
+    } catch(err) {
+      toast('Save failed — ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save Coffee';
+    }
+  }
+
+  /* ═══════════════════════════════════════════
+     DELETE
+  ═══════════════════════════════════════════ */
+  let pendingDeleteId = null;
+
+  function confirmDelete() {
+    pendingDeleteId = currentId;
+    document.getElementById('delete-dialog').classList.add('open');
+  }
+
+  function confirmDeleteById(id) {
+    pendingDeleteId = id;
+    document.getElementById('delete-dialog').classList.add('open');
+  }
+
+  function closeDialog() {
+    document.getElementById('delete-dialog').classList.remove('open');
+    pendingDeleteId = null;
+  }
+
+  async function deleteCurrent() {
+    if (!pendingDeleteId) return;
+    const id = pendingDeleteId;
+    closeDialog();
+    try {
+      await removeFromSheet(id);
+      if (currentId) closeForm();
+      toast('Coffee deleted.', 'error');
+    } catch(err) {
+      toast('Delete failed — ' + err.message, 'error');
+    }
+  }
+
+  /* ═══════════════════════════════════════════
+     EXPORT / IMPORT
+  ═══════════════════════════════════════════ */
+  /* CSV column order */
+  const CSV_COLS = [
+    'id','name','subtitle','slug','description','notes','recommended',
+    'origin','region','farm','farmer','altitude',
+    'variety','process','roast','roaster','level','bagSizes','image','updatedAt'
+  ];
+
+  function csvCell(val) {
+    if (val === null || val === undefined) return '';
+    const s = Array.isArray(val) ? val.join(';') : String(val);
+    // Wrap in quotes if contains comma, quote, or newline
+    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function exportCSV() {
+    const data = getAll();
+    const header = CSV_COLS.join(',');
+    const rows = data.map(c => CSV_COLS.map(k => csvCell(c[k])).join(','));
+    const csv  = [header, ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `butler-coffee-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Exported as CSV!', 'success');
+  }
+
+  function parseCSVLine(line) {
+    const result = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQ) {
+        if (ch === '"' && line[i+1] === '"') { cur += '"'; i++; }
+        else if (ch === '"') { inQ = false; }
+        else { cur += ch; }
+      } else {
+        if (ch === '"') { inQ = true; }
+        else if (ch === ',') { result.push(cur); cur = ''; }
+        else { cur += ch; }
+      }
+    }
+    result.push(cur);
+    return result;
+  }
+
+  function importCSV(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      try {
+        const lines = ev.target.result.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l => l.trim());
+        if (lines.length < 2) throw new Error('Empty file');
+        const headers = parseCSVLine(lines[0]);
+        const coffees = [];
+        for (let i = 1; i < lines.length; i++) {
+          const vals = parseCSVLine(lines[i]);
+          if (vals.length < 2) continue;
+          const obj = {};
+          headers.forEach((h, idx) => { obj[h] = vals[idx] || ''; });
+          if (typeof obj.bagSizes === 'string') {
+            obj.bagSizes = obj.bagSizes ? obj.bagSizes.split(';').map(s => s.trim()).filter(Boolean) : [];
+          }
+          if (!obj.id) obj.id = newId();
+          obj.updatedAt = obj.updatedAt || new Date().toISOString();
+          coffees.push(obj);
+        }
+        setLoading(true);
+        await apiCall('POST', { action: 'import', coffees });
+        _cache = coffees;
+        refreshCounts();
+        toast(`Imported ${coffees.length} coffees to Sheet!`, 'success');
+      } catch(err) {
+        toast('Import failed — ' + err.message, 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  /* ═══════════════════════════════════════════
+     TOAST
+  ═══════════════════════════════════════════ */
+  function toast(msg, type = 'success') {
+    const wrap = document.getElementById('toast-wrap');
+    const el   = document.createElement('div');
+    el.className = `toast toast--${type}`;
+    el.innerHTML = `<span class="toast__icon">${type === 'success' ? '✓' : '✕'}</span> ${msg}`;
+    wrap.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+
+  /* ═══════════════════════════════════════════
+     SECTION SWITCHER (for future nav items)
+  ═══════════════════════════════════════════ */
+  function showSection(name) {
+    document.querySelectorAll('.nav-link:not(.nav-link--soon)').forEach(l => l.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+  }
+
+  /* ═══════════════════════════════════════════
+     UTILS
+  ═══════════════════════════════════════════ */
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ═══════════════════════════════════════════
+     INIT — load from Google Sheet on page open
+  ═══════════════════════════════════════════ */
+  loadFromSheet();
+  </script>
+
+</body>
+</html>
