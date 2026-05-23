@@ -624,7 +624,7 @@
     .pricing-table { padding: 2px 0; }
     .pricing-table-header {
       display: grid;
-      grid-template-columns: 48px 1fr 1fr 62px;
+      grid-template-columns: 44px 1fr 1fr 58px 54px;
       gap: 8px;
       padding-bottom: 8px;
       border-bottom: 1px solid var(--border);
@@ -635,10 +635,10 @@
       text-transform: uppercase;
       color: var(--muted);
     }
-    .pricing-table-header span:last-child { text-align: right; }
+    .pricing-table-header span:nth-child(n+4) { text-align: right; }
     .pricing-row {
       display: grid;
-      grid-template-columns: 48px 1fr 1fr 62px;
+      grid-template-columns: 44px 1fr 1fr 58px 54px;
       gap: 8px;
       align-items: center;
       margin-bottom: 8px;
@@ -655,7 +655,7 @@
       font-size: 0.82rem;
       text-align: right;
     }
-    .pricing-margin {
+    .pricing-profit, .pricing-margin {
       font-size: 0.8rem;
       font-weight: 700;
       text-align: right;
@@ -665,6 +665,13 @@
     .margin--ok   { color: #d97706; }
     .margin--low  { color: var(--red); }
     .margin--none { color: var(--subtle); }
+
+    /* ─── IMAGE UPLOAD ROW ───────────────────── */
+    .img-upload-row {
+      display: flex;
+      gap: 8px;
+      margin: 10px 0 12px;
+    }
 
     /* ─── STATS BAR ──────────────────────────── */
     .stats-row {

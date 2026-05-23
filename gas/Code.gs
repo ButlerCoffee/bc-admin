@@ -61,12 +61,21 @@ const C = {
   ROAST_DATE:   49,
   LABEL_BAG:    50,
   LOT_NO:       51,
-  PRINT:        52
+  PRINT:        52,
+  // Extended columns — add headers "Subtitle ES" and "Description ES" to the sheet
+  SUBTITLE_ES:    53,
+  DESCRIPTION_ES: 54
 };
 
-const TOTAL_COLS = 53; // columns A–BA
+const TOTAL_COLS = 55; // columns A–BC
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Pad a row array to the required length */
+function ensureRowLength(row, len) {
+  while (row.length < len) row.push('');
+  return row;
+}
 
 /** Strip currency symbols / spaces and return a plain numeric string, or '' */
 function parseMoney(val) {
@@ -115,9 +124,11 @@ function rowToApp(row) {
     cost500g:    parseMoney(row[C.COST_500G]),
     cost250g:    parseMoney(row[C.COST_250G]),
     sale1kg:     parseMoney(row[C.SALE_1KG]),
-    sale500g:    parseMoney(row[C.SALE_500G]),
-    sale250g:    parseMoney(row[C.SALE_250G]),
-    updatedAt:   new Date().toISOString()
+    sale500g:      parseMoney(row[C.SALE_500G]),
+    sale250g:      parseMoney(row[C.SALE_250G]),
+    subtitle_es:    String(row[C.SUBTITLE_ES]    || ''),
+    description_es: String(row[C.DESCRIPTION_ES] || ''),
+    updatedAt:      new Date().toISOString()
   };
 }
 
@@ -150,8 +161,10 @@ function applyToRow(row, coffee) {
   if (coffee.cost500g !== undefined) row[C.COST_500G]  = coffee.cost500g === '' ? '' : Number(coffee.cost500g) || '';
   if (coffee.cost250g !== undefined) row[C.COST_250G]  = coffee.cost250g === '' ? '' : Number(coffee.cost250g) || '';
   if (coffee.sale1kg  !== undefined) row[C.SALE_1KG]   = coffee.sale1kg  === '' ? '' : Number(coffee.sale1kg)  || '';
-  if (coffee.sale500g !== undefined) row[C.SALE_500G]   = coffee.sale500g === '' ? '' : Number(coffee.sale500g) || '';
-  if (coffee.sale250g !== undefined) row[C.SALE_250G]   = coffee.sale250g === '' ? '' : Number(coffee.sale250g) || '';
+  if (coffee.sale500g     !== undefined) row[C.SALE_500G]      = coffee.sale500g     === '' ? '' : Number(coffee.sale500g)     || '';
+  if (coffee.sale250g     !== undefined) row[C.SALE_250G]      = coffee.sale250g     === '' ? '' : Number(coffee.sale250g)     || '';
+  if (coffee.subtitle_es    !== undefined) row[C.SUBTITLE_ES]    = coffee.subtitle_es    || '';
+  if (coffee.description_es !== undefined) row[C.DESCRIPTION_ES] = coffee.description_es || '';
   return row;
 }
 
@@ -189,9 +202,10 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
 
-    if (body.action === 'save')   return handleSave(body.coffee);
-    if (body.action === 'delete') return handleDelete(body.id);
-    if (body.action === 'import') return handleImport(body.coffees);
+    if (body.action === 'save')        return handleSave(body.coffee);
+    if (body.action === 'delete')      return handleDelete(body.id);
+    if (body.action === 'import')      return handleImport(body.coffees);
+    if (body.action === 'uploadImage') return handleUploadImage(body.filename, body.mimeType, body.data);
 
     return jsonOut({ ok: false, error: 'Unknown action: ' + body.action });
   } catch (err) {
@@ -210,7 +224,7 @@ function handleSave(coffee) {
     if (String(data[i][C.ID]) === String(coffee.id)) {
       // Update in place — only overwrite app-managed columns
       const sheetRow = i + 1; // 1-based for Range
-      const updatedRow = applyToRow([...data[i]], coffee);
+      const updatedRow = applyToRow(ensureRowLength([...data[i]], TOTAL_COLS), coffee);
       sheet.getRange(sheetRow, 1, 1, TOTAL_COLS).setValues([updatedRow]);
       return jsonOut({ ok: true, data: rowToApp(updatedRow) });
     }
@@ -245,6 +259,29 @@ function handleDelete(id) {
     }
   }
   return jsonOut({ ok: false, error: 'Row not found for id: ' + id });
+}
+
+// ─── Image Upload to Drive ────────────────────────────────────────────────────
+
+function handleUploadImage(filename, mimeType, base64data) {
+  try {
+    const bytes = Utilities.base64Decode(base64data);
+    const blob  = Utilities.newBlob(bytes, mimeType, filename || 'coffee-image');
+
+    // Store in a dedicated folder — created automatically on first use
+    let folder;
+    const folders = DriveApp.getFoldersByName('Butler Coffee Images');
+    folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Butler Coffee Images');
+
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    const fileId = file.getId();
+    const url = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w400';
+    return jsonOut({ ok: true, data: { url: url, fileId: fileId } });
+  } catch (err) {
+    return jsonOut({ ok: false, error: 'Image upload failed: ' + err.message });
+  }
 }
 
 // ─── Import (bulk replace) ────────────────────────────────────────────────────
