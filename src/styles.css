@@ -691,6 +691,104 @@
       display: flex;
       align-items: center;
       gap: 5px;
+      cursor: pointer;
+      user-select: none;
+      transition: all var(--ease);
     }
     .stat-pill strong { color: var(--text); }
+    .stat-pill:hover { border-color: var(--border-2); background: #f8f8f4; }
+    .stat-pill--active { background: var(--black); color: rgba(255,255,255,0.75); border-color: var(--black); }
+    .stat-pill--active strong { color: #fff; }
+    .stat-pill--clear { color: var(--red); border-color: #fecaca; background: var(--red-bg); }
+    .stat-pill--clear:hover { background: #fee2e2; }
+
+    /* ─── VIEW PANEL ─────────────────────────── */
+    .view-panel { display: block; }
+    .view-name {
+      font-family: var(--font-head);
+      font-weight: 900;
+      font-size: 1.35rem;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+    .view-subtitle {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    .view-subtitle--es {
+      font-size: 0.85rem;
+      color: var(--subtle);
+      margin-top: 2px;
+    }
+    .view-slug {
+      font-family: 'Courier New', monospace;
+      font-size: 0.76rem;
+      color: var(--subtle);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      display: inline-block;
+      padding: 3px 8px;
+      margin-top: 8px;
+    }
+    .view-description {
+      font-size: 0.875rem;
+      color: var(--text);
+      line-height: 1.7;
+      white-space: pre-wrap;
+      margin-bottom: 16px;
+    }
+    .view-description:last-child { margin-bottom: 0; }
+    .view-description--es {
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      margin-bottom: 0;
+    }
+    .view-detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 20px;
+    }
+    .view-field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .view-field-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--subtle);
+    }
+    .view-field-value {
+      font-size: 0.875rem;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .view-img-wrap {
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: var(--bg);
+      overflow: hidden;
+      border-radius: 0 0 var(--r2) var(--r2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .view-img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .pricing-ro {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+      text-align: right;
+      white-space: nowrap;
+    }
   

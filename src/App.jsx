@@ -89,6 +89,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('');
   const [roasterFilter, setRoasterFilter] = useState('');
+  const [originFilter, setOriginFilter] = useState(''); // 'blend' | 'single' | ''
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
   function toast(msg, type = 'success') {
@@ -113,8 +114,15 @@ export default function App() {
   const filtered = useMemo(() => coffees.filter(c => {
     const q = search.toLowerCase();
     const textMatch = !q || [c.name, c.subtitle, c.origin].some(v => (v||'').toLowerCase().includes(q));
-    return textMatch && (!levelFilter || c.level === levelFilter) && (!roasterFilter || c.roaster === roasterFilter);
-  }), [coffees, search, levelFilter, roasterFilter]);
+    const isBlend = (c.origin || '').toLowerCase() === 'blend';
+    const originMatch = !originFilter
+      || (originFilter === 'blend'  && isBlend)
+      || (originFilter === 'single' && !isBlend);
+    return textMatch
+      && (!levelFilter  || c.level   === levelFilter)
+      && (!roasterFilter || c.roaster === roasterFilter)
+      && originMatch;
+  }), [coffees, search, levelFilter, roasterFilter, originFilter]);
 
   const stats = useMemo(() => coffees.reduce((acc, c) => {
     const key = c.level || 'Unlabeled'; acc[key] = (acc[key] || 0) + 1; return acc;
@@ -122,6 +130,11 @@ export default function App() {
 
   function updateField(key, value) {
     setForm(f => ({ ...f, [key]: value, ...(key === 'name' && !slugManual ? { slug: toSlug(value) } : {}) }));
+  }
+  function openView(id) {
+    setCurrentId(id);
+    setPanel('view');
+    window.scrollTo(0, 0);
   }
   function openForm(id = null) {
     const coffee = id ? coffees.find(c => c.id === id) : null;
@@ -255,7 +268,9 @@ export default function App() {
       </div>
       <div className="content">
         {panel === 'list'
-          ? <ListPanel {...{ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, filtered, openForm, setPendingDeleteId }} />
+          ? <ListPanel {...{ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, originFilter, setOriginFilter, filtered, openForm, openView, setPendingDeleteId }} />
+          : panel === 'view'
+          ? <ViewPanel coffee={coffees.find(c => c.id === currentId)} onBack={closeForm} onEdit={openForm} />
           : <FormPanel {...{ form, updateField, slugManual, setSlugManual, saveCoffee, closeForm, currentId, setPendingDeleteId, onImageUpload: handleImageUpload }} />
         }
       </div>
@@ -275,30 +290,260 @@ export default function App() {
 }
 
 // ── List Panel ────────────────────────────────────────────────────────────────
-function ListPanel({ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, filtered, openForm, setPendingDeleteId }) {
-  return <div id="list-panel">
-    <div className="stats-row">{Object.entries(stats).map(([k,v]) => <div className="stat-pill" key={k}><strong>{v}</strong> {k}</div>)}</div>
-    <div className="toolbar">
-      <div className="search-wrap"><span className="search-wrap__icon">🔍</span><input className="search-input" type="search" placeholder="Search coffees…" value={search} onChange={e => setSearch(e.target.value)} /></div>
-      <select className="filter-select" value={levelFilter} onChange={e => setLevelFilter(e.target.value)}><option value="">All levels</option><option value="Base Coffee">Base</option><option value="Explorer Coffee">Explorer</option><option value="Alpine Coffee">Alpine</option><option value="Summit Coffee">Summit</option><option value="Decaf Coffee">Decaf</option><option value="SINGLE ORDER ONLY">Single Order</option></select>
-      <select className="filter-select" value={roasterFilter} onChange={e => setRoasterFilter(e.target.value)}><option value="">All roasters</option><option value="DABOV Specialty Coffee">DABOV Specialty Coffee</option></select>
+function ListPanel({ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, originFilter, setOriginFilter, filtered, openForm, openView, setPendingDeleteId }) {
+  function toggleLevel(level) {
+    setLevelFilter(prev => prev === level ? '' : level);
+  }
+  return (
+    <div id="list-panel">
+      {/* Clickable level pills */}
+      <div className="stats-row">
+        {Object.entries(stats).map(([k, v]) => (
+          <div
+            key={k}
+            className={`stat-pill${levelFilter === k ? ' stat-pill--active' : ''}`}
+            onClick={() => toggleLevel(k)}
+            title={levelFilter === k ? 'Clear filter' : `Filter by ${k}`}
+          >
+            <strong>{v}</strong> {k.replace(' Coffee', '')}
+          </div>
+        ))}
+        {levelFilter && (
+          <div className="stat-pill stat-pill--clear" onClick={() => setLevelFilter('')} title="Clear filter">
+            ✕ Clear
+          </div>
+        )}
+      </div>
+
+      {/* Toolbar */}
+      <div className="toolbar">
+        <div className="search-wrap">
+          <span className="search-wrap__icon">🔍</span>
+          <input className="search-input" type="search" placeholder="Search coffees…" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <select className="filter-select" value={originFilter} onChange={e => setOriginFilter(e.target.value)}>
+          <option value="">Blend + Single Origin</option>
+          <option value="single">Single Origin only</option>
+          <option value="blend">Blends only</option>
+        </select>
+        <select className="filter-select" value={roasterFilter} onChange={e => setRoasterFilter(e.target.value)}>
+          <option value="">All roasters</option>
+          <option value="DABOV Specialty Coffee">DABOV Specialty Coffee</option>
+        </select>
+      </div>
+
+      {/* Table */}
+      <div className="table-wrap">
+        <table>
+          <thead><tr>
+            <th style={{width:'30%'}}>Coffee</th>
+            <th>Level</th>
+            <th>Process</th>
+            <th>Origin</th>
+            <th>Sizes</th>
+            <th style={{width:116}}>Actions</th>
+          </tr></thead>
+          <tbody>{filtered.map(c => (
+            <tr key={c.id}>
+              <td>
+                <div className="td-name">{c.name || '—'}</div>
+                {c.subtitle && <div className="td-sub">{c.subtitle}</div>}
+              </td>
+              <td>{c.level ? <span className={`level-badge ${LEVEL_CLASSES[c.level]||''}`}>{c.level.replace(' Coffee','')}</span> : '—'}</td>
+              <td style={{color:'var(--muted)',fontSize:'0.8rem'}}>{c.process||'—'}</td>
+              <td style={{color:'var(--muted)',fontSize:'0.8rem'}}>{c.origin||'—'}</td>
+              <td><div className="size-chips">{c.bagSizes?.length ? c.bagSizes.map(s => <span className="size-chip" key={s}>{s}</span>) : '—'}</div></td>
+              <td><div className="td-actions">
+                <button className="btn btn--ghost btn--sm btn--icon" onClick={() => openView(c.id)} title="View details">👁️</button>
+                <button className="btn btn--ghost btn--sm btn--icon" onClick={() => openForm(c.id)} title="Edit">✏️</button>
+                <button className="btn btn--ghost btn--sm btn--icon" onClick={() => setPendingDeleteId(c.id)} title="Delete" style={{color:'var(--red)'}}>🗑️</button>
+              </div></td>
+            </tr>
+          ))}</tbody>
+        </table>
+        {filtered.length === 0 && (
+          <div className="empty-state">
+            <div className="empty-state__icon">☕</div>
+            <div className="empty-state__title">No coffees found</div>
+            <div className="empty-state__text">Try adjusting your filters or search.</div>
+          </div>
+        )}
+      </div>
     </div>
-    <div className="table-wrap">
-      <table><thead><tr><th style={{width:'30%'}}>Coffee</th><th>Level</th><th>Process</th><th>Origin</th><th>Sizes</th><th style={{width:100}}>Actions</th></tr></thead>
-      <tbody>{filtered.map(c => <tr key={c.id}>
-        <td><div className="td-name">{c.name||'—'}</div>{c.subtitle&&<div className="td-sub">{c.subtitle}</div>}</td>
-        <td>{c.level?<span className={`level-badge ${LEVEL_CLASSES[c.level]||''}`}>{c.level.replace(' Coffee','')}</span>:'—'}</td>
-        <td style={{color:'var(--muted)',fontSize:'0.8rem'}}>{c.process||'—'}</td>
-        <td style={{color:'var(--muted)',fontSize:'0.8rem'}}>{c.origin||'—'}</td>
-        <td><div className="size-chips">{c.bagSizes?.length?c.bagSizes.map(s=><span className="size-chip" key={s}>{s}</span>):'—'}</div></td>
-        <td><div className="td-actions">
-          <button className="btn btn--ghost btn--sm btn--icon" onClick={() => openForm(c.id)} title="Edit">✏️</button>
-          <button className="btn btn--ghost btn--sm btn--icon" onClick={() => setPendingDeleteId(c.id)} title="Delete" style={{color:'var(--red)'}}>🗑️</button>
-        </div></td>
-      </tr>)}</tbody></table>
-      {filtered.length === 0 && <div className="empty-state"><div className="empty-state__icon">☕</div><div className="empty-state__title">No coffees yet</div><div className="empty-state__text">Click "Add Coffee" to add your first entry.</div></div>}
+  );
+}
+
+// ── View Panel ────────────────────────────────────────────────────────────────
+function ViewPanel({ coffee, onBack, onEdit }) {
+  if (!coffee) return (
+    <div className="view-panel">
+      <div className="form-header">
+        <button className="form-header__back" onClick={onBack}>← Back</button>
+        <h1 className="form-header__title">Coffee not found</h1>
+      </div>
     </div>
-  </div>;
+  );
+
+  const SIZES = [
+    { key: '1kg',  label: '1 kg'  },
+    { key: '500g', label: '500 g' },
+    { key: '250g', label: '250 g' },
+  ];
+
+  function ViewField({ label, value }) {
+    if (!value) return null;
+    return (
+      <div className="view-field">
+        <span className="view-field-label">{label}</span>
+        <span className="view-field-value">{value}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="view-panel">
+      <div className="form-header">
+        <button className="form-header__back" onClick={onBack}>← Back</button>
+        <h1 className="form-header__title">{coffee.name || 'Untitled'}</h1>
+        <button className="btn btn--ghost btn--sm" style={{marginLeft:'auto'}} onClick={() => onEdit(coffee.id)}>✏️ Edit</button>
+      </div>
+
+      <div className="form-grid">
+
+        {/* ── LEFT COLUMN ── */}
+        <div>
+          <div className="card">
+            <div className="card__header"><span className="card__icon">✏️</span><span className="card__title">Identity</span></div>
+            <div className="card__body">
+              <div className="view-name">{coffee.name}</div>
+              {coffee.subtitle && <div className="view-subtitle">{coffee.subtitle}</div>}
+              {coffee.subtitle_es && <div className="view-subtitle view-subtitle--es">🇪🇸 {coffee.subtitle_es}</div>}
+              {coffee.slug && <div className="view-slug">/coffee/{coffee.slug}</div>}
+            </div>
+          </div>
+
+          {(coffee.description || coffee.description_es) && (
+            <div className="card">
+              <div className="card__header"><span className="card__icon">📖</span><span className="card__title">Description</span></div>
+              <div className="card__body">
+                {coffee.description && (
+                  <div className="view-description">{coffee.description}</div>
+                )}
+                {coffee.description_es && (
+                  <div className="view-description view-description--es">
+                    <span className="view-field-label" style={{display:'block',marginBottom:6}}>🇪🇸 Español</span>
+                    {coffee.description_es}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="card">
+            <div className="card__header"><span className="card__icon">☕</span><span className="card__title">Coffee Details</span></div>
+            <div className="card__body">
+              {coffee.notes && (
+                <div className="view-field" style={{marginBottom:12}}>
+                  <span className="view-field-label">Tasting Notes</span>
+                  <span className="view-field-value">{coffee.notes}</span>
+                </div>
+              )}
+              {coffee.recommended && (
+                <div className="view-field" style={{marginBottom:14}}>
+                  <span className="view-field-label">Recommended For</span>
+                  <span className="view-field-value">{coffee.recommended}</span>
+                </div>
+              )}
+              <div className="view-detail-grid">
+                <ViewField label="Origin" value={coffee.origin} />
+                <ViewField label="Region" value={coffee.region} />
+                <ViewField label="Farm" value={coffee.farm} />
+                <ViewField label="Farmer" value={coffee.farmer} />
+                <ViewField label="Altitude" value={coffee.altitude ? `${coffee.altitude} m` : ''} />
+                <ViewField label="Variety" value={coffee.variety} />
+                <ViewField label="Process" value={coffee.process} />
+                <ViewField label="Roast" value={coffee.roast} />
+                <ViewField label="Roasted By" value={coffee.roaster} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── RIGHT COLUMN ── */}
+        <div>
+          {/* Image */}
+          <div className="card">
+            <div className="card__header"><span className="card__icon">🖼️</span><span className="card__title">Image</span></div>
+            <div className="card__body" style={{padding:0}}>
+              <div className="view-img-wrap">
+                <img
+                  src={toImageUrl(coffee.image)}
+                  alt={coffee.name}
+                  onError={e => { e.currentTarget.style.display = 'none'; }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Subscription */}
+          <div className="card">
+            <div className="card__header"><span className="card__icon">📦</span><span className="card__title">Subscription</span></div>
+            <div className="card__body">
+              {coffee.level && (
+                <div className="view-field" style={{marginBottom:12}}>
+                  <span className="view-field-label">Level</span>
+                  <span className={`level-badge ${LEVEL_CLASSES[coffee.level] || ''}`} style={{marginTop:4,display:'inline-block'}}>{coffee.level.replace(' Coffee','')}</span>
+                </div>
+              )}
+              {coffee.bagSizes?.length > 0 && (
+                <div className="view-field">
+                  <span className="view-field-label">Bag Sizes</span>
+                  <div className="size-chips" style={{marginTop:4}}>
+                    {coffee.bagSizes.map(s => <span className="size-chip" key={s}>{s}</span>)}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Pricing — read-only */}
+          <div className="card">
+            <div className="card__header"><span className="card__icon">💶</span><span className="card__title">Pricing</span></div>
+            <div className="card__body">
+              <div className="pricing-table">
+                <div className="pricing-table-header">
+                  <span>Size</span><span>Cost €</span><span>Sale €</span><span>Profit</span><span>Margin</span>
+                </div>
+                {SIZES.map(({ key, label }) => {
+                  const cost   = parseFloat(coffee[`cost${key}`]);
+                  const sale   = parseFloat(coffee[`sale${key}`]);
+                  const profit = !isNaN(cost) && !isNaN(sale) ? sale - cost : null;
+                  const margin = profit !== null && sale > 0 ? (profit / sale * 100) : null;
+                  const cls    = margin === null ? 'margin--none'
+                               : margin >= 50   ? 'margin--good'
+                               : margin >= 40   ? 'margin--ok'
+                               :                  'margin--low';
+                  const hasCost = !isNaN(cost);
+                  const hasSale = !isNaN(sale);
+                  if (!hasCost && !hasSale) return null;
+                  return (
+                    <div className="pricing-row" key={key}>
+                      <span className="pricing-size">{label}</span>
+                      <span className="pricing-ro">{hasCost ? `€${cost.toFixed(2)}` : '—'}</span>
+                      <span className="pricing-ro">{hasSale ? `€${sale.toFixed(2)}` : '—'}</span>
+                      <span className={`pricing-profit ${cls}`}>{profit !== null ? `€${profit.toFixed(2)}` : '—'}</span>
+                      <span className={`pricing-margin ${cls}`}>{margin !== null ? `${margin.toFixed(1)}%` : '—'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
 }
 
 // ── Form Panel ────────────────────────────────────────────────────────────────
