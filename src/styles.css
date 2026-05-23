@@ -413,8 +413,7 @@
       font-size: 0.85rem;
     }
     .card__icon { font-size: 0.9rem; }
-    .card__html, body, #root { min-height: 100%; }
-    body { padding: 18px 20px; }
+    .card__body { padding: 18px 20px; }
 
     /* form fields */
     .field { margin-bottom: 14px; }
@@ -620,6 +619,52 @@
     .dialog__title { font-family: var(--font-head); font-weight: 900; font-size: 1.05rem; margin-bottom: 8px; }
     .dialog__text  { font-size: 0.875rem; color: var(--muted); margin-bottom: 22px; line-height: 1.6; }
     .dialog__actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* ─── PRICING TABLE ─────────────────────── */
+    .pricing-table { padding: 2px 0; }
+    .pricing-table-header {
+      display: grid;
+      grid-template-columns: 48px 1fr 1fr 62px;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 10px;
+      font-size: 0.67rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .pricing-table-header span:last-child { text-align: right; }
+    .pricing-row {
+      display: grid;
+      grid-template-columns: 48px 1fr 1fr 62px;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .pricing-row:last-child { margin-bottom: 0; }
+    .pricing-size {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text);
+      padding-top: 1px;
+    }
+    .pricing-row .input {
+      padding: 7px 8px;
+      font-size: 0.82rem;
+      text-align: right;
+    }
+    .pricing-margin {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .margin--good { color: var(--green); }
+    .margin--ok   { color: #d97706; }
+    .margin--low  { color: var(--red); }
+    .margin--none { color: var(--subtle); }
 
     /* ─── STATS BAR ──────────────────────────── */
     .stats-row {

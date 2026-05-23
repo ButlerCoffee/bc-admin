@@ -44,6 +44,12 @@ const C = {
   URL:          24,
   // 25–39: pricing/margin columns (preserved, never overwritten by this script)
   IMG_DRIVE_ID: 40,
+  COST_1KG:     25,
+  COST_500G:    26,
+  COST_250G:    27,
+  SALE_1KG:     31,
+  SALE_500G:    32,
+  SALE_250G:    33,
   DRIVE_URL:    41,
   DRIVE_ALT:    42,
   VISIBLE:      43,
@@ -61,6 +67,16 @@ const C = {
 const TOTAL_COLS = 53; // columns A–BA
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Strip currency symbols / spaces and return a plain numeric string, or '' */
+function parseMoney(val) {
+  if (val === '' || val === null || val === undefined) return '';
+  // If it's already a number (e.g. from a formula cell), just return it
+  if (typeof val === 'number') return String(val);
+  // Strip €, $, spaces, commas
+  const cleaned = String(val).replace(/[€$£\s,]/g, '').trim();
+  return cleaned === '' || isNaN(Number(cleaned)) ? '' : cleaned;
+}
 
 function jsonOut(obj) {
   return ContentService
@@ -95,6 +111,12 @@ function rowToApp(row) {
     level:       String(row[C.LEVEL]       || ''),
     bagSizes:    bagSizes,
     image:       String(row[C.DRIVE_URL]   || ''),
+    cost1kg:     parseMoney(row[C.COST_1KG]),
+    cost500g:    parseMoney(row[C.COST_500G]),
+    cost250g:    parseMoney(row[C.COST_250G]),
+    sale1kg:     parseMoney(row[C.SALE_1KG]),
+    sale500g:    parseMoney(row[C.SALE_500G]),
+    sale250g:    parseMoney(row[C.SALE_250G]),
     updatedAt:   new Date().toISOString()
   };
 }
@@ -123,6 +145,13 @@ function applyToRow(row, coffee) {
   row[C.BAG_SIZE]    = bagStr;
   row[C.SLUG]        = coffee.slug        || '';
   row[C.DRIVE_URL]   = coffee.image       || '';
+  // Pricing — store as plain numbers (sheet formulas for margins will recalculate)
+  if (coffee.cost1kg  !== undefined) row[C.COST_1KG]  = coffee.cost1kg  === '' ? '' : Number(coffee.cost1kg)  || '';
+  if (coffee.cost500g !== undefined) row[C.COST_500G]  = coffee.cost500g === '' ? '' : Number(coffee.cost500g) || '';
+  if (coffee.cost250g !== undefined) row[C.COST_250G]  = coffee.cost250g === '' ? '' : Number(coffee.cost250g) || '';
+  if (coffee.sale1kg  !== undefined) row[C.SALE_1KG]   = coffee.sale1kg  === '' ? '' : Number(coffee.sale1kg)  || '';
+  if (coffee.sale500g !== undefined) row[C.SALE_500G]   = coffee.sale500g === '' ? '' : Number(coffee.sale500g) || '';
+  if (coffee.sale250g !== undefined) row[C.SALE_250G]   = coffee.sale250g === '' ? '' : Number(coffee.sale250g) || '';
   return row;
 }
 

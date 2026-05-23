@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiCall } from './lib/api.js';
 
-const DEFAULT_IMAGE = 'https://drive.google.com/uc?export=view&id=1BrvJTmLjnaUQ6feC6NkSvET6SouIkCQK';
+const DEFAULT_IMAGE = 'https://drive.google.com/uc?export=view&id=1LYVoFp3Y1jv2i1ow7G7nPxCCQQzLSVZp';
 const emptyCoffee = {
   id: '', name: '', subtitle: '', slug: '', description: '', notes: '', recommended: '',
   origin: '', region: '', farm: '', farmer: '', altitude: '', variety: '', process: '',
-  roast: '', roaster: '', level: '', bagSizes: [], image: '', updatedAt: ''
+  roast: '', roaster: '', level: '', bagSizes: [], image: '',
+  cost1kg: '', cost500g: '', cost250g: '',
+  sale1kg: '', sale500g: '', sale250g: '',
+  updatedAt: ''
 };
 const LEVEL_CLASSES = {
   'Base Coffee': 'level--base', 'Explorer Coffee': 'level--explorer', 'Alpine Coffee': 'level--alpine',
   'Summit Coffee': 'level--summit', 'Decaf Coffee': 'level--decaf', 'SINGLE ORDER ONLY': 'level--single'
 };
-const CSV_COLS = ['id','name','subtitle','slug','description','notes','recommended','origin','region','farm','farmer','altitude','variety','process','roast','roaster','level','bagSizes','image','updatedAt'];
+const CSV_COLS = ['id','name','subtitle','slug','description','notes','recommended','origin','region','farm','farmer','altitude','variety','process','roast','roaster','level','bagSizes','image','cost1kg','cost500g','cost250g','sale1kg','sale500g','sale250g','updatedAt'];
 
 function newId() { return `bc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`; }
 function toSlug(str = '') {
@@ -198,8 +201,44 @@ function FormPanel({ form, updateField, setSlugManual, saveCoffee, closeForm, cu
       <Card icon="🌍" title="Origin"><div className="field-row"><Field label="Country / Origin"><input className="input" value={form.origin} onChange={e => updateField('origin', e.target.value)} /></Field><Field label="Region"><input className="input" value={form.region} onChange={e => updateField('region', e.target.value)} /></Field></div><div className="field-row"><Field label="Farm"><input className="input" value={form.farm} onChange={e => updateField('farm', e.target.value)} /></Field><Field label="Farmer"><input className="input" value={form.farmer} onChange={e => updateField('farmer', e.target.value)} /></Field></div><Field label="Altitude (m)"><input className="input" value={form.altitude} onChange={e => updateField('altitude', e.target.value)} /></Field></Card>
       <Card icon="🔬" title="Coffee Details"><div className="field-row"><Field label="Variety"><input className="input" value={form.variety} onChange={e => updateField('variety', e.target.value)} /></Field><Field label="Process"><input className="input" value={form.process} onChange={e => updateField('process', e.target.value)} /></Field></div><div className="field-row"><Field label="Roast"><input className="input" value={form.roast} onChange={e => updateField('roast', e.target.value)} /></Field><Field label="Roasted By"><select className="select-input" value={form.roaster} onChange={e => updateField('roaster', e.target.value)}><option value="">— Select roaster —</option><option value="DABOV Specialty Coffee">DABOV Specialty Coffee</option></select></Field></div></Card></div>
       <div><Card icon="📦" title="Subscription"><Field label="Subscription Level" required><select className="select-input" required value={form.level} onChange={e => updateField('level', e.target.value)}><option value="">— Select level —</option><option value="Base Coffee">Base Coffee</option><option value="Explorer Coffee">Explorer Coffee</option><option value="Alpine Coffee">Alpine Coffee</option><option value="Summit Coffee">Summit Coffee</option><option value="Decaf Coffee">Decaf Coffee</option><option value="SINGLE ORDER ONLY">Single Order Only</option></select></Field><Field label="Bag Sizes"><div className="check-group">{['250g','500g','1kg'].map(s => <label className="check-item" key={s}><input type="checkbox" checked={form.bagSizes.includes(s)} onChange={() => toggleSize(s)} /> {s}</label>)}</div></Field></Card>
+      <PricingCard form={form} updateField={updateField} />
       <Card icon="🖼️" title="Image"><div className="img-preview">{form.image ? <img src={form.image} alt="Preview" onError={e => e.currentTarget.style.display = 'none'} /> : <div className="img-preview__empty"><div className="img-preview__empty-icon">🖼️</div><span>No image</span></div>}</div><Field label="Image URL"><input className="input input--mono" type="url" value={form.image} onChange={e => updateField('image', e.target.value)} /><div className="field-hint">Google Drive export URL or direct image URL.</div></Field><div className="form-actions" style={{background:'none',borderTop:'1px solid var(--border)'}}><button type="button" className="btn btn--ghost btn--sm" onClick={() => updateField('image', DEFAULT_IMAGE)}>Use default image</button></div></Card>
       <div className="card"><div className="form-actions"><button type="button" className="btn btn--ghost btn--sm" onClick={() => setPendingDeleteId(currentId)} style={{display:currentId?'block':'none',color:'var(--red)'}}>Delete</button><div className="form-actions__spacer" /><button type="button" className="btn btn--ghost btn--sm" onClick={closeForm}>Cancel</button><button type="submit" className="btn btn--primary">Save Coffee</button></div></div></div></div></form></div>;
+}
+function PricingCard({ form, updateField }) {
+  const SIZES = [
+    { key: '1kg',  label: '1 kg'  },
+    { key: '500g', label: '500 g' },
+    { key: '250g', label: '250 g' },
+  ];
+  return (
+    <div className="card">
+      <div className="card__header"><span className="card__icon">💶</span><span className="card__title">Pricing</span></div>
+      <div className="card__body">
+        <div className="pricing-table">
+          <div className="pricing-table-header">
+            <span>Size</span><span>Cost €</span><span>Sale €</span><span>Margin</span>
+          </div>
+          {SIZES.map(({ key, label }) => {
+            const cost = parseFloat(form[`cost${key}`]);
+            const sale = parseFloat(form[`sale${key}`]);
+            const margin = !isNaN(cost) && !isNaN(sale) && sale > 0 ? (sale - cost) / sale * 100 : null;
+            const cls = margin === null ? 'margin--none' : margin >= 50 ? 'margin--good' : margin >= 40 ? 'margin--ok' : 'margin--low';
+            return (
+              <div className="pricing-row" key={key}>
+                <span className="pricing-size">{label}</span>
+                <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
+                  value={form[`cost${key}`]} onChange={e => updateField(`cost${key}`, e.target.value)} />
+                <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
+                  value={form[`sale${key}`]} onChange={e => updateField(`sale${key}`, e.target.value)} />
+                <span className={`pricing-margin ${cls}`}>{margin !== null ? `${margin.toFixed(1)}%` : '—'}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 function Card({ icon, title, children }) { return <div className="card"><div className="card__header"><span className="card__icon">{icon}</span><span className="card__title">{title}</span></div><div className="card__body">{children}</div></div>; }
 function Field({ label, required, children }) { return <div className="field"><label>{label} {required && <span className="req">*</span>}</label>{children}</div>; }
