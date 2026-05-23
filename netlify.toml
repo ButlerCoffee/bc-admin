@@ -1,0 +1,10 @@
+[build]
+  command   = "npm run build"
+  publish   = "dist"
+
+# Environment variables are set in the Netlify UI:
+#   Site settings → Environment variables → Add variable
+#   Key:   VITE_BUTLER_COFFEE_API_URL
+#   Value: https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec
+#
+# After setting the variable, trigger a new deploy from the Netlify dashboard.
