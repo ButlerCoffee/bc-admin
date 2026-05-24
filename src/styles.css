@@ -987,16 +987,15 @@
     }
 
     /* ─── LABELS PANEL ───────────────────────── */
-    .labels-panel {
-      max-width: 1100px;
-    }
+    .labels-panel { max-width: 1100px; }
+
     .labels-layout {
       display: grid;
-      grid-template-columns: 380px 1fr;
+      grid-template-columns: 400px 1fr;
       gap: 20px;
       align-items: start;
     }
-    @media (max-width: 860px) {
+    @media (max-width: 900px) {
       .labels-layout { grid-template-columns: 1fr; }
     }
     .labels-left,
@@ -1006,12 +1005,44 @@
       gap: 16px;
     }
 
-    /* Queue items */
+    .form-grid--3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 80px;
+      gap: 12px;
+    }
+
+    /* Required field star */
+    .field-req { color: var(--red); margin-left: 2px; }
+
+    /* Error states */
+    .input--error { border-color: var(--red) !important; }
+    .field-error {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--red);
+      margin-top: 3px;
+    }
+
+    /* Subscription level badge in form */
+    .lbl-level-badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.07em;
+      background: var(--bg);
+      border: 1px solid var(--border-2);
+      border-radius: 4px;
+      padding: 2px 8px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* Queue */
     .queue-list {
       display: flex;
       flex-direction: column;
       gap: 8px;
-      max-height: 320px;
+      max-height: 340px;
       overflow-y: auto;
     }
     .queue-item {
@@ -1022,18 +1053,8 @@
       border: 1px solid var(--border);
       border-radius: var(--r);
       padding: 8px 10px;
-      overflow: hidden;
     }
-    .queue-item__stripe {
-      width: 4px;
-      height: 36px;
-      border-radius: 2px;
-      flex-shrink: 0;
-    }
-    .queue-item__body {
-      flex: 1;
-      min-width: 0;
-    }
+    .queue-item__body { flex: 1; min-width: 0; }
     .queue-item__name {
       font-weight: 700;
       font-size: 0.88rem;
@@ -1050,113 +1071,96 @@
     }
 
     /* ─── LABEL HTML PREVIEW ─────────────────── */
-    .lbl-pages {
+    .lbl-preview-list {
       display: flex;
       flex-direction: column;
-      gap: 20px;
-      padding: 8px 0;
     }
-    .lbl-page__label {
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: var(--muted);
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-    .lbl-sheet {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    /* Individual label — scaled to ~75% of real size for preview */
+
+    /* Label — black/white border, matches PDF layout */
     .lbl {
-      display: flex;
       width: 100%;
-      max-width: 382px; /* 101.6mm × 3.77px/mm ≈ 382px, scaled 75% ≈ 287 */
-      border: 1.5px solid #222;
-      border-radius: 2px;
-      overflow: hidden;
+      max-width: 383px;   /* 101.6 mm × 3.77 px/mm */
+      border: 1.5px solid #000;
       font-family: 'Inter', sans-serif;
-    }
-    .lbl-stripe {
-      width: 6px;
-      flex-shrink: 0;
+      background: #fff;
     }
     .lbl-body {
-      flex: 1;
-      padding: 5px 6px 0;
       display: flex;
       flex-direction: column;
     }
-    .lbl-top { }
-    .lbl-top__meta {
+
+    /* Header */
+    .lbl-header {
+      padding: 5px 7px 5px;
+    }
+    .lbl-header__top {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
       margin-bottom: 1px;
     }
-    .lbl-tier {
-      font-size: 0.55rem;
+    .lbl-level {
+      font-size: 0.58rem;
       font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #222;
     }
     .lbl-bagsize {
-      font-size: 0.55rem;
-      color: var(--muted);
-    }
-    .lbl-sub {
-      font-size: 0.62rem;
-      color: var(--muted);
-      font-style: italic;
-      margin-bottom: 1px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #222;
     }
     .lbl-name {
-      font-size: 1rem;
+      font-size: 1.05rem;
       font-weight: 800;
       line-height: 1.1;
+      color: #000;
       margin-bottom: 2px;
       font-family: var(--font-head);
     }
     .lbl-notes {
-      font-size: 0.58rem;
-      color: var(--muted);
+      font-size: 0.62rem;
       font-style: italic;
-      margin-bottom: 3px;
+      color: #333;
     }
-    .lbl-divider {
+
+    /* Separator */
+    .lbl-sep {
       height: 1px;
-      background: #ccc;
-      margin: 3px 0;
+      background: #000;
     }
+
+    /* 4-column detail grid */
     .lbl-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 0;
     }
     .lbl-cell {
+      padding: 3px 4px;
+      border-right: 1px solid #000;
       display: flex;
       flex-direction: column;
-      padding: 2px 3px;
-      border-right: 1px solid #ddd;
+      gap: 2px;
     }
     .lbl-cell:last-child { border-right: none; }
+
     .lbl-ch {
       font-size: 0.5rem;
-      font-weight: 700;
-      color: #999;
-      text-transform: uppercase;
+      font-weight: 800;
       letter-spacing: 0.04em;
+      color: #222;
+      text-transform: uppercase;
     }
     .lbl-cv {
-      font-size: 0.6rem;
-      font-weight: 600;
-      color: #222;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #000;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
+
+    /* Date / Lot row — inline label + value, side by side */
     .lbl-datelot {
       display: flex;
       align-items: stretch;
@@ -1164,20 +1168,26 @@
     .lbl-datelot__half {
       flex: 1;
       display: flex;
-      flex-direction: column;
-      padding: 2px 3px;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 5px;
     }
-    .lbl-datelot__sep {
+    .lbl-datelot__vsep {
       width: 1px;
-      background: #ddd;
-      margin: 2px 0;
+      background: #000;
     }
+    .lbl-dv {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #000;
+    }
+
+    /* Footer */
     .lbl-footer {
-      text-align: center;
-      font-size: 0.55rem;
-      font-weight: 800;
-      letter-spacing: 0.1em;
-      color: #555;
-      padding: 3px 0;
-      margin-top: 2px;
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 6px;
+      font-size: 0.58rem;
+      font-weight: 700;
+      color: #222;
     }
