@@ -987,11 +987,13 @@
     }
 
     /* ─── LABELS PANEL ───────────────────────── */
-    .labels-panel { max-width: 1100px; }
+    .labels-panel {
+      max-width: 1100px;
+    }
 
     .labels-layout {
       display: grid;
-      grid-template-columns: 400px 1fr;
+      grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
       gap: 20px;
       align-items: start;
     }
@@ -1003,11 +1005,25 @@
       display: flex;
       flex-direction: column;
       gap: 16px;
+      min-width: 0;
     }
 
-    .form-grid--3 {
+    /* Equal two columns (used in LabelsPanel) */
+    .form-grid--2 {
       display: grid;
-      grid-template-columns: 1fr 1fr 80px;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    /* Bag size (flex) + Qty (fixed narrow) */
+    .form-grid--bagqty {
+      display: grid;
+      grid-template-columns: 1fr 80px;
+      gap: 12px;
+    }
+    /* Strictly equal two columns for detail fields */
+    .form-grid--eq2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 12px;
     }
 

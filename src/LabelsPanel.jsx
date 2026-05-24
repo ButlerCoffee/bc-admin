@@ -359,65 +359,70 @@ export default function LabelsPanel({ coffees, onBack }) {
           {/* Coffee selector */}
           <div className="card">
             <div className="card__header">Coffee</div>
-
-            <div className="field">
-              <label>Coffee name</label>
-              <select className={`input${errors.coffee ? ' input--error' : ''}`}
-                value={selectedId} onChange={e => selectCoffee(e.target.value)}>
-                <option value="">— select a coffee —</option>
-                {sortedCoffees.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              {errors.coffee && <span className="field-error">{errors.coffee}</span>}
-            </div>
-
-            {selectedCoffee && (
-              <div className="lbl-level-badge">
-                {(selectedCoffee.level || '').toUpperCase() || 'NO LEVEL'}
-              </div>
-            )}
-
-            <div className="form-grid form-grid--3">
-              <div className="field">
-                <label>Bag size</label>
-                {selectedCoffee?.bagSizes?.length ? (
-                  <select className={`input${errors.bagSize ? ' input--error' : ''}`}
-                    value={bagSize} onChange={e => setBagSize(e.target.value)}>
-                    <option value="">— size —</option>
-                    {selectedCoffee.bagSizes.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input className={`input${errors.bagSize ? ' input--error' : ''}`}
-                    type="text" value={bagSize}
-                    onChange={e => setBagSize(e.target.value)} placeholder="250g" />
-                )}
-                {errors.bagSize && <span className="field-error">{errors.bagSize}</span>}
-              </div>
+            <div className="card__body">
 
               <div className="field">
-                <label>Lot no. <span className="field-req">*</span></label>
-                <input className={`input${errors.lotNo ? ' input--error' : ''}`}
-                  type="text" value={lotNo}
-                  onChange={e => setLotNo(e.target.value)} placeholder="e.g. 24-07" />
-                {errors.lotNo && <span className="field-error">{errors.lotNo}</span>}
+                <label>Coffee name</label>
+                <select className={`input${errors.coffee ? ' input--error' : ''}`}
+                  value={selectedId} onChange={e => selectCoffee(e.target.value)}>
+                  <option value="">— select a coffee —</option>
+                  {sortedCoffees.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {errors.coffee && <span className="field-error">{errors.coffee}</span>}
               </div>
 
-              <div className="field">
-                <label>Qty</label>
-                <input className="input" type="number" min="1" max="99"
-                  value={qty} onChange={e => setQty(e.target.value)} />
-              </div>
-            </div>
+              {selectedCoffee && (
+                <div className="lbl-level-badge">
+                  {(selectedCoffee.level || '').toUpperCase() || 'NO LEVEL'}
+                </div>
+              )}
 
-            <div className="field">
-              <label>Roast date <span className="field-req">*</span></label>
-              <input className={`input${errors.roastDate ? ' input--error' : ''}`}
-                type="date" value={roastDate}
-                onChange={e => setRoastDate(e.target.value)} />
-              {errors.roastDate && <span className="field-error">{errors.roastDate}</span>}
+              {/* Row 1: Bag size + Qty */}
+              <div className="form-grid form-grid--bagqty">
+                <div className="field">
+                  <label>Bag size</label>
+                  {selectedCoffee?.bagSizes?.length ? (
+                    <select className={`input${errors.bagSize ? ' input--error' : ''}`}
+                      value={bagSize} onChange={e => setBagSize(e.target.value)}>
+                      <option value="">— size —</option>
+                      {selectedCoffee.bagSizes.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input className={`input${errors.bagSize ? ' input--error' : ''}`}
+                      type="text" value={bagSize}
+                      onChange={e => setBagSize(e.target.value)} placeholder="250g" />
+                  )}
+                  {errors.bagSize && <span className="field-error">{errors.bagSize}</span>}
+                </div>
+                <div className="field">
+                  <label>Qty</label>
+                  <input className="input" type="number" min="1" max="99"
+                    value={qty} onChange={e => setQty(e.target.value)} />
+                </div>
+              </div>
+
+              {/* Row 2: Lot no. + Roast date */}
+              <div className="form-grid form-grid--2">
+                <div className="field">
+                  <label>Lot no. <span className="field-req">*</span></label>
+                  <input className={`input${errors.lotNo ? ' input--error' : ''}`}
+                    type="text" value={lotNo}
+                    onChange={e => setLotNo(e.target.value)} placeholder="e.g. 24-07" />
+                  {errors.lotNo && <span className="field-error">{errors.lotNo}</span>}
+                </div>
+                <div className="field">
+                  <label>Roast date <span className="field-req">*</span></label>
+                  <input className={`input${errors.roastDate ? ' input--error' : ''}`}
+                    type="date" value={roastDate}
+                    onChange={e => setRoastDate(e.target.value)} />
+                  {errors.roastDate && <span className="field-error">{errors.roastDate}</span>}
+                </div>
+              </div>
+
             </div>
           </div>
 
@@ -427,62 +432,41 @@ export default function LabelsPanel({ coffees, onBack }) {
               Details
               <span style={{ fontWeight: 400, fontSize: '0.78rem', color: 'var(--muted)', marginLeft: 6 }}>auto-filled · editable</span>
             </div>
+            <div className="card__body">
 
-            <div className="form-grid form-grid--2">
-              <div className="field">
-                <label>Process</label>
-                <input className="input" type="text" value={details.process}
-                  onChange={e => det('process', e.target.value)} />
+              <div className="form-grid form-grid--eq2">
+                {[
+                  { label: 'Process',      key: 'process'  },
+                  { label: 'Variety',      key: 'variety'  },
+                  { label: 'Region',       key: 'region'   },
+                  { label: 'Altitude (m)', key: 'alt'      },
+                  { label: 'Farm',         key: 'farm'     },
+                  { label: 'Farmer',       key: 'farmer'   },
+                  { label: 'Roast',        key: 'roast'    },
+                  { label: 'Roasters',     key: 'roasters' },
+                ].map(({ label, key }) => (
+                  <div className="field" key={key}>
+                    <label>{label}</label>
+                    <input className="input" type="text" value={details[key]}
+                      onChange={e => det(key, e.target.value)} />
+                  </div>
+                ))}
               </div>
-              <div className="field">
-                <label>Variety</label>
-                <input className="input" type="text" value={details.variety}
-                  onChange={e => det('variety', e.target.value)} />
-              </div>
-              <div className="field">
-                <label>Region</label>
-                <input className="input" type="text" value={details.region}
-                  onChange={e => det('region', e.target.value)} />
-              </div>
-              <div className="field">
-                <label>Altitude (m)</label>
-                <input className="input" type="text" value={details.alt}
-                  onChange={e => det('alt', e.target.value)} />
-              </div>
-              <div className="field">
-                <label>Farm</label>
-                <input className="input" type="text" value={details.farm}
-                  onChange={e => det('farm', e.target.value)} />
-              </div>
-              <div className="field">
-                <label>Farmer</label>
-                <input className="input" type="text" value={details.farmer}
-                  onChange={e => det('farmer', e.target.value)} />
-              </div>
-              <div className="field">
-                <label>Roast profile</label>
-                <input className="input" type="text" value={details.roast}
-                  onChange={e => det('roast', e.target.value)} />
-              </div>
-              <div className="field">
-                <label>Roasters</label>
-                <input className="input" type="text" value={details.roasters}
-                  onChange={e => det('roasters', e.target.value)} />
-              </div>
-            </div>
 
-            <div className="field">
-              <label>Notes</label>
-              <input className="input" type="text" value={details.notes}
-                onChange={e => det('notes', e.target.value)}
-                placeholder="Short tasting note, e.g. Mango, Berries, Chocolate" />
-            </div>
+              <div className="field">
+                <label>Notes</label>
+                <input className="input" type="text" value={details.notes}
+                  onChange={e => det('notes', e.target.value)}
+                  placeholder="Short tasting note, e.g. Mango, Berries, Chocolate" />
+              </div>
 
-            <div style={{ marginTop: 14 }}>
-              <button className="btn btn--primary" onClick={addToQueue}
-                style={{ width: '100%' }}>
-                + Add to queue{qty > 1 ? ` (×${qty})` : ''}
-              </button>
+              <div style={{ marginTop: 14 }}>
+                <button className="btn btn--primary" onClick={addToQueue}
+                  style={{ width: '100%' }}>
+                  + Add to queue{qty > 1 ? ` (×${qty})` : ''}
+                </button>
+              </div>
+
             </div>
           </div>
         </div>
@@ -496,72 +480,77 @@ export default function LabelsPanel({ coffees, onBack }) {
                 <button className="btn btn--ghost btn--sm" onClick={clearQueue}>Clear all</button>
               )}
             </div>
+            <div className="card__body">
 
-            {queue.length === 0 ? (
-              <div className="empty-state" style={{ padding: '24px 0' }}>
-                <div className="empty-state__icon">🏷️</div>
-                <div className="empty-state__title">Queue is empty</div>
-                <div className="empty-state__text">Fill in the form and click Add to queue.</div>
-              </div>
-            ) : (
-              <div className="queue-list">
-                {queue.map((item, idx) => (
-                  <div key={idx} className="queue-item">
-                    <div className="queue-item__body">
-                      <div className="queue-item__name">{item.coffee.name}</div>
-                      <div className="queue-item__meta">
-                        {item.bagSize && <span>{item.bagSize}</span>}
-                        <span>{formatDate(item.date)}</span>
-                        {item.lot && <span>Lot {item.lot}</span>}
+              {queue.length === 0 ? (
+                <div className="empty-state" style={{ padding: '12px 0' }}>
+                  <div className="empty-state__icon">🏷️</div>
+                  <div className="empty-state__title">Queue is empty</div>
+                  <div className="empty-state__text">Fill in the form and click Add to queue.</div>
+                </div>
+              ) : (
+                <div className="queue-list">
+                  {queue.map((item, idx) => (
+                    <div key={idx} className="queue-item">
+                      <div className="queue-item__body">
+                        <div className="queue-item__name">{item.coffee.name}</div>
+                        <div className="queue-item__meta">
+                          {item.bagSize && <span>{item.bagSize}</span>}
+                          <span>{formatDate(item.date)}</span>
+                          {item.lot && <span>Lot {item.lot}</span>}
+                        </div>
                       </div>
+                      <button className="btn btn--ghost btn--sm btn--icon"
+                        style={{ color: 'var(--red)', flexShrink: 0 }}
+                        onClick={() => removeItem(idx)} title="Remove">✕</button>
                     </div>
-                    <button className="btn btn--ghost btn--sm btn--icon"
-                      style={{ color: 'var(--red)', flexShrink: 0 }}
-                      onClick={() => removeItem(idx)} title="Remove">✕</button>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
 
-            {queue.length > 0 && (
-              <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <button className="btn btn--primary" onClick={generate}
-                  disabled={pdfStatus === 'loading'} style={{ width: '100%' }}>
-                  {pdfStatus === 'loading'
-                    ? '⏳ Generating…'
-                    : `📄 Generate PDF (${queue.length} label${queue.length !== 1 ? 's' : ''})`}
-                </button>
-                {pdfStatus === 'done' && pdfUrl && (
-                  <a href={pdfUrl}
-                    download={`butler-labels-${new Date().toISOString().slice(0, 10)}.pdf`}
-                    className="btn btn--ghost"
-                    style={{ width: '100%', textAlign: 'center', textDecoration: 'none' }}>
-                    ⬇️ Download PDF
-                  </a>
-                )}
-                {pdfStatus === 'error' && (
-                  <div style={{ color: 'var(--red)', fontSize: '0.85rem' }}>
-                    PDF generation failed — check console.
-                  </div>
-                )}
-              </div>
-            )}
+              {queue.length > 0 && (
+                <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <button className="btn btn--primary" onClick={generate}
+                    disabled={pdfStatus === 'loading'} style={{ width: '100%' }}>
+                    {pdfStatus === 'loading'
+                      ? '⏳ Generating…'
+                      : `📄 Generate PDF (${queue.length} label${queue.length !== 1 ? 's' : ''})`}
+                  </button>
+                  {pdfStatus === 'done' && pdfUrl && (
+                    <a href={pdfUrl}
+                      download={`butler-labels-${new Date().toISOString().slice(0, 10)}.pdf`}
+                      className="btn btn--ghost"
+                      style={{ width: '100%', textAlign: 'center', textDecoration: 'none' }}>
+                      ⬇️ Download PDF
+                    </a>
+                  )}
+                  {pdfStatus === 'error' && (
+                    <div style={{ color: 'var(--red)', fontSize: '0.85rem' }}>
+                      PDF generation failed — check console.
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
           </div>
 
           {/* Preview */}
           {queue.length > 0 && (
             <div className="card">
               <div className="card__header">Preview</div>
-              <div className="lbl-preview-list">
-                {queue.map((item, idx) => (
-                  <div key={idx} style={{ marginBottom: idx < queue.length - 1 ? 12 : 0 }}>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--muted)', fontWeight: 700,
-                      textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-                      Label {idx + 1}
+              <div className="card__body">
+                <div className="lbl-preview-list">
+                  {queue.map((item, idx) => (
+                    <div key={idx} style={{ marginBottom: idx < queue.length - 1 ? 16 : 0 }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--muted)', fontWeight: 700,
+                        textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
+                        Label {idx + 1}
+                      </div>
+                      <LabelPreview item={item} />
                     </div>
-                    <LabelPreview item={item} />
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           )}
