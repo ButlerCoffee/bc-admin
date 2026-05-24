@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiCall } from './lib/api.js';
+import LabelsPanel from './LabelsPanel.jsx';
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
 // Google's uc?export=view URL does NOT work reliably as a direct <img> src.
@@ -281,6 +282,7 @@ export default function App() {
         </div>
         <div className="nav-section">
           <div className="nav-section__label">Tools</div>
+          <button className={`nav-link${panel === 'labels' ? ' active' : ''}`} onClick={() => setPanel('labels')}><span className="nav-link__icon">🏷️</span> Label Generator</button>
           <button className="nav-link" onClick={() => loadFromSheet(true)}><span className="nav-link__icon">🔄</span> Sync from Sheet</button>
           <button className="nav-link" onClick={exportCSV}><span className="nav-link__icon">⬇️</span> Export CSV</button>
           <button className="nav-link" onClick={() => document.getElementById('import-file').click()}><span className="nav-link__icon">⬆️</span> Import CSV</button>
@@ -293,15 +295,17 @@ export default function App() {
     <div className="main">
       <div className="topbar">
         <div className="topbar__left">
-          <span className="topbar__title">Coffee</span>
-          <span className="topbar__count">{coffees.length} entr{coffees.length === 1 ? 'y' : 'ies'}</span>
+          <span className="topbar__title">{panel === 'labels' ? 'Label Generator' : 'Coffee'}</span>
+          {panel !== 'labels' && <span className="topbar__count">{coffees.length} entr{coffees.length === 1 ? 'y' : 'ies'}</span>}
         </div>
         <div className="topbar__right">
           {panel === 'list' && <button className="btn btn--primary" onClick={() => openForm(null)}>+ Add Coffee</button>}
         </div>
       </div>
       <div className="content">
-        {panel === 'list'
+        {panel === 'labels'
+          ? <LabelsPanel coffees={coffees} onBack={() => setPanel('list')} />
+          : panel === 'list'
           ? <ListPanel {...{ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, originFilter, setOriginFilter, visibilityFilter, setVisibilityFilter, filtered, openForm, openView, setPendingDeleteId }} />
           : panel === 'view'
           ? <ViewPanel coffee={coffees.find(c => c.id === currentId)} onBack={closeForm} onEdit={openForm} />

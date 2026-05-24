@@ -985,4 +985,199 @@
       text-align: right;
       white-space: nowrap;
     }
-  
+
+    /* ─── LABELS PANEL ───────────────────────── */
+    .labels-panel {
+      max-width: 1100px;
+    }
+    .labels-layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 860px) {
+      .labels-layout { grid-template-columns: 1fr; }
+    }
+    .labels-left,
+    .labels-right {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Queue items */
+    .queue-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .queue-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 8px 10px;
+      overflow: hidden;
+    }
+    .queue-item__stripe {
+      width: 4px;
+      height: 36px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .queue-item__body {
+      flex: 1;
+      min-width: 0;
+    }
+    .queue-item__name {
+      font-weight: 700;
+      font-size: 0.88rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .queue-item__meta {
+      display: flex;
+      gap: 8px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ─── LABEL HTML PREVIEW ─────────────────── */
+    .lbl-pages {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 8px 0;
+    }
+    .lbl-page__label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .lbl-sheet {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    /* Individual label — scaled to ~75% of real size for preview */
+    .lbl {
+      display: flex;
+      width: 100%;
+      max-width: 382px; /* 101.6mm × 3.77px/mm ≈ 382px, scaled 75% ≈ 287 */
+      border: 1.5px solid #222;
+      border-radius: 2px;
+      overflow: hidden;
+      font-family: 'Inter', sans-serif;
+    }
+    .lbl-stripe {
+      width: 6px;
+      flex-shrink: 0;
+    }
+    .lbl-body {
+      flex: 1;
+      padding: 5px 6px 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .lbl-top { }
+    .lbl-top__meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 1px;
+    }
+    .lbl-tier {
+      font-size: 0.55rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .lbl-bagsize {
+      font-size: 0.55rem;
+      color: var(--muted);
+    }
+    .lbl-sub {
+      font-size: 0.62rem;
+      color: var(--muted);
+      font-style: italic;
+      margin-bottom: 1px;
+    }
+    .lbl-name {
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 2px;
+      font-family: var(--font-head);
+    }
+    .lbl-notes {
+      font-size: 0.58rem;
+      color: var(--muted);
+      font-style: italic;
+      margin-bottom: 3px;
+    }
+    .lbl-divider {
+      height: 1px;
+      background: #ccc;
+      margin: 3px 0;
+    }
+    .lbl-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+    }
+    .lbl-cell {
+      display: flex;
+      flex-direction: column;
+      padding: 2px 3px;
+      border-right: 1px solid #ddd;
+    }
+    .lbl-cell:last-child { border-right: none; }
+    .lbl-ch {
+      font-size: 0.5rem;
+      font-weight: 700;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .lbl-cv {
+      font-size: 0.6rem;
+      font-weight: 600;
+      color: #222;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lbl-datelot {
+      display: flex;
+      align-items: stretch;
+    }
+    .lbl-datelot__half {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 2px 3px;
+    }
+    .lbl-datelot__sep {
+      width: 1px;
+      background: #ddd;
+      margin: 2px 0;
+    }
+    .lbl-footer {
+      text-align: center;
+      font-size: 0.55rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      color: #555;
+      padding: 3px 0;
+      margin-top: 2px;
+    }
