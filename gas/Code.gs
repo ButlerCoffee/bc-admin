@@ -42,14 +42,15 @@ const C = {
   BAG_SIZE:     22,
   SLUG:         23,
   URL:          24,
-  // 25–39: pricing/margin columns (preserved, never overwritten by this script)
-  IMG_DRIVE_ID: 40,
+  // 25–27: costs (read + written by this script)
   COST_1KG:     25,
   COST_500G:    26,
   COST_250G:    27,
   SALE_1KG:     31,
   SALE_500G:    32,
   SALE_250G:    33,
+  // 28–30: multipliers; 34–39: $ and % margin formulas (formula cells — never overwritten)
+  IMG_DRIVE_ID: 40,
   DRIVE_URL:    41,
   DRIVE_ALT:    42,
   VISIBLE:      43,
@@ -59,15 +60,11 @@ const C = {
   SUMMIT:       47,
   GRIND:        48,
   ROAST_DATE:   49,
-  LABEL_BAG:    50,
-  LOT_NO:       51,
-  PRINT:        52,
-  // Extended columns — add headers "Subtitle ES" and "Description ES" to the sheet
-  SUBTITLE_ES:    53,
-  DESCRIPTION_ES: 54
+  SUBTITLE_ES:    50,  // column AY — "Subtitle ES"
+  DESCRIPTION_ES: 51   // column AZ — "Description ES"
 };
 
-const TOTAL_COLS = 55; // columns A–BC
+const TOTAL_COLS = 52; // columns A–AZ
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -82,10 +79,55 @@ function parseMoney(val) {
   if (val === '' || val === null || val === undefined) return '';
   // If it's already a number (e.g. from a formula cell), just return it
   if (typeof val === 'number') return String(val);
-  // Strip €, $, spaces, commas
-  const cleaned = String(val).replace(/[€$£\s,]/g, '').trim();
-  return cleaned === '' || isNaN(Number(cleaned)) ? '' : cleaned;
+  // Strip currency symbols and spaces first
+  let s = String(val).replace(/[€$£\s]/g, '').trim();
+  if (s === '') return '';
+  // Detect European decimal format: "12,50" or "1.234,50"
+  // (ends with comma + 1–2 digits, and dots are thousands separators)
+  if (/^[\d.]*,\d{1,2}$/.test(s)) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    // Assume US format: commas are thousands separators
+    s = s.replace(/,/g, '');
+  }
+  return isNaN(Number(s)) ? '' : s;
 }
+
+/**
+ * DIAGNOSTIC — run this once in the Apps Script editor to check column mapping.
+ * Open Extensions → Apps Script → select debugColumns → Run → Execution log.
+ * This prints:
+ *   1. Every header and its 0-based index, so you can see where your columns actually are.
+ *   2. The pricing + ES values for the first real data row.
+ */
+function debugColumns() {
+  const sheet   = getSheet();
+  const data    = sheet.getDataRange().getValues();
+  const headers = data[0];
+
+  Logger.log('=== HEADERS (0-based index → name) ===');
+  headers.forEach(function(h, i) {
+    if (String(h).trim()) Logger.log('  col ' + i + ' → "' + h + '"');
+  });
+
+  // Find first real data row
+  for (var i = 2; i < data.length; i++) {
+    var row = data[i];
+    if (!String(row[C.NAME]).trim()) continue;
+    Logger.log('=== FIRST DATA ROW: ' + row[C.NAME] + ' ===');
+    // Pricing
+    Logger.log('COST_1KG  (expect col 25): col25=' + row[25] + ' | col26=' + row[26] + ' | col27=' + row[27]);
+    Logger.log('SALE_1KG  (expect col 31): col31=' + row[31] + ' | col32=' + row[32] + ' | col33=' + row[33]);
+    Logger.log('parseMoney → cost1kg=' + parseMoney(row[25]) + '  sale1kg=' + parseMoney(row[31]));
+    // Spanish
+    Logger.log('SUBTITLE_ES (expect col 53): "' + row[53] + '"');
+    Logger.log('DESCRIPTION_ES (expect col 54): "' + row[54] + '"');
+    break;
+  }
+}
+
+// Keep the old name as an alias so existing references still work
+function debugPricing() { debugColumns(); }
 
 function jsonOut(obj) {
   return ContentService

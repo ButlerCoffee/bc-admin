@@ -696,7 +696,7 @@
       transition: all var(--ease);
     }
     .stat-pill strong { color: var(--text); }
-    .stat-pill:hover { border-color: var(--border-2); background: #f8f8f4; }
+    .stat-pill:hover  { border-color: var(--border-2); background: #f8f8f4; }
     .stat-pill--active { background: var(--black); color: rgba(255,255,255,0.75); border-color: var(--black); }
     .stat-pill--active strong { color: #fff; }
     .stat-pill--clear { color: var(--red); border-color: #fecaca; background: var(--red-bg); }
@@ -784,6 +784,129 @@
       height: 100%;
       object-fit: cover;
     }
+    /* ─── CLICKABLE TABLE ROWS ───────────────── */
+    .tr--clickable { cursor: pointer; }
+
+    /* ─── FORM ACTIONS BOTTOM ROW ────────────── */
+    .form-actions-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 20px;
+      padding: 16px 20px;
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: var(--r2);
+    }
+
+    /* ─── DELETE DIALOG CONFIRM INPUT ───────── */
+    .dialog__confirm {
+      margin-bottom: 20px;
+    }
+    .dialog__confirm-label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 6px;
+    }
+    .dialog__actions .btn--danger:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* ─── MARKDOWN EDITOR ────────────────────── */
+    .md-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 5px;
+    }
+    .md-tabs {
+      display: flex;
+      gap: 2px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px;
+    }
+    .md-tab {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 3px 9px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all var(--ease);
+    }
+    .md-tab:hover { color: var(--text); }
+    .md-tab--active { background: var(--surf); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .md-preview {
+      width: 100%;
+      padding: 10px 11px;
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background: var(--bg);
+      font-size: 0.875rem;
+      line-height: 1.7;
+      color: var(--text);
+      overflow-y: auto;
+    }
+    .md-empty { color: var(--subtle); font-style: italic; }
+
+    /* Rendered markdown styles (used in both preview and ViewPanel) */
+    .md-rendered p     { margin: 0 0 0.75em; line-height: 1.7; }
+    .md-rendered p:last-child { margin-bottom: 0; }
+    .md-rendered strong { font-weight: 700; }
+    .md-rendered em    { font-style: italic; }
+    .md-rendered h1, .md-rendered h2, .md-rendered h3 {
+      font-family: var(--font-head);
+      font-weight: 800;
+      margin: 0.9em 0 0.3em;
+      line-height: 1.2;
+    }
+    .md-rendered .md-h { }
+    .md-rendered h1 { font-size: 1.15rem; }
+    .md-rendered h2 { font-size: 1rem; }
+    .md-rendered h3 { font-size: 0.9rem; }
+    .md-rendered .md-ul {
+      margin: 0 0 0.75em 1.1em;
+      padding: 0;
+    }
+    .md-rendered .md-ul li { margin-bottom: 0.2em; }
+
+    /* ─── VIEW PANEL ES FIELDS ───────────────── */
+    .view-subtitle-es-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      margin-top: 3px;
+    }
+    .view-lang-tag {
+      font-size: 0.68rem;
+      font-weight: 700;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .view-description-es-block {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .view-lang-divider {
+      margin-bottom: 8px;
+    }
+
     .pricing-ro {
       font-size: 0.82rem;
       font-weight: 600;

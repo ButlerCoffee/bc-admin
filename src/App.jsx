@@ -77,6 +77,32 @@ function parseCSVLine(line) {
   return result;
 }
 
+// ── Markdown renderer (lightweight — bold, italic, headings, bullet lists) ────
+function renderMarkdown(md) {
+  if (!md) return '';
+  const esc    = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const inline = s => s
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,         '<em>$1</em>');
+  return esc(md).split(/\n\n+/).map(block => {
+    const lines = block.split('\n');
+    // Heading
+    if (lines.length === 1 && /^#{1,3} /.test(lines[0])) {
+      const lvl = lines[0].match(/^(#+)/)[1].length;
+      return `<h${lvl} class="md-h">${inline(lines[0].replace(/^#+\s+/, ''))}</h${lvl}>`;
+    }
+    // Bullet list
+    if (lines.some(l => /^[\-\*] /.test(l.trim()))) {
+      const items = lines.filter(l => l.trim())
+        .map(l => `<li>${inline(l.replace(/^[\-\*] /, ''))}</li>`).join('');
+      return `<ul class="md-ul">${items}</ul>`;
+    }
+    // Paragraph
+    return `<p>${lines.map(inline).join('<br>')}</p>`;
+  }).join('');
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [coffees, setCoffees] = useState([]);
@@ -91,6 +117,7 @@ export default function App() {
   const [roasterFilter, setRoasterFilter] = useState('');
   const [originFilter, setOriginFilter] = useState(''); // 'blend' | 'single' | ''
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   function toast(msg, type = 'success') {
     const id = Date.now() + Math.random();
@@ -162,9 +189,10 @@ export default function App() {
   }
 
   async function deleteCurrent() {
-    if (!pendingDeleteId) return;
+    if (!pendingDeleteId || deleteConfirmText !== 'DELETE') return;
     const id = pendingDeleteId;
     setPendingDeleteId(null);
+    setDeleteConfirmText('');
     setLoading(true);
     try {
       await apiCall('POST', { action: 'delete', id });
@@ -281,9 +309,21 @@ export default function App() {
     {pendingDeleteId && <div className="dialog-overlay open"><div className="dialog">
       <div className="dialog__title">Delete this coffee?</div>
       <div className="dialog__text">This will permanently remove the entry from the database. This action cannot be undone.</div>
+      <div className="dialog__confirm">
+        <label className="dialog__confirm-label">Type DELETE to confirm</label>
+        <input
+          className="input"
+          type="text"
+          value={deleteConfirmText}
+          onChange={e => setDeleteConfirmText(e.target.value)}
+          placeholder="DELETE"
+          autoFocus
+          onKeyDown={e => e.key === 'Enter' && deleteCurrent()}
+        />
+      </div>
       <div className="dialog__actions">
-        <button className="btn btn--ghost btn--sm" onClick={() => setPendingDeleteId(null)}>Cancel</button>
-        <button className="btn btn--danger btn--sm" onClick={deleteCurrent}>Yes, delete</button>
+        <button className="btn btn--ghost btn--sm" onClick={() => { setPendingDeleteId(null); setDeleteConfirmText(''); }}>Cancel</button>
+        <button className="btn btn--danger btn--sm" onClick={deleteCurrent} disabled={deleteConfirmText !== 'DELETE'}>Yes, delete</button>
       </div>
     </div></div>}
   </>;
@@ -322,7 +362,7 @@ function ListPanel({ stats, search, setSearch, levelFilter, setLevelFilter, roas
           <input className="search-input" type="search" placeholder="Search coffees…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <select className="filter-select" value={originFilter} onChange={e => setOriginFilter(e.target.value)}>
-          <option value="">Blend + Single Origin</option>
+          <option value="">All Origins</option>
           <option value="single">Single Origin only</option>
           <option value="blend">Blends only</option>
         </select>
@@ -344,7 +384,7 @@ function ListPanel({ stats, search, setSearch, levelFilter, setLevelFilter, roas
             <th style={{width:116}}>Actions</th>
           </tr></thead>
           <tbody>{filtered.map(c => (
-            <tr key={c.id}>
+            <tr key={c.id} className="tr--clickable" onClick={() => openView(c.id)}>
               <td>
                 <div className="td-name">{c.name || '—'}</div>
                 {c.subtitle && <div className="td-sub">{c.subtitle}</div>}
@@ -353,7 +393,7 @@ function ListPanel({ stats, search, setSearch, levelFilter, setLevelFilter, roas
               <td style={{color:'var(--muted)',fontSize:'0.8rem'}}>{c.process||'—'}</td>
               <td style={{color:'var(--muted)',fontSize:'0.8rem'}}>{c.origin||'—'}</td>
               <td><div className="size-chips">{c.bagSizes?.length ? c.bagSizes.map(s => <span className="size-chip" key={s}>{s}</span>) : '—'}</div></td>
-              <td><div className="td-actions">
+              <td><div className="td-actions" onClick={e => e.stopPropagation()}>
                 <button className="btn btn--ghost btn--sm btn--icon" onClick={() => openView(c.id)} title="View details">👁️</button>
                 <button className="btn btn--ghost btn--sm btn--icon" onClick={() => openForm(c.id)} title="Edit">✏️</button>
                 <button className="btn btn--ghost btn--sm btn--icon" onClick={() => setPendingDeleteId(c.id)} title="Delete" style={{color:'var(--red)'}}>🗑️</button>
@@ -417,7 +457,12 @@ function ViewPanel({ coffee, onBack, onEdit }) {
             <div className="card__body">
               <div className="view-name">{coffee.name}</div>
               {coffee.subtitle && <div className="view-subtitle">{coffee.subtitle}</div>}
-              {coffee.subtitle_es && <div className="view-subtitle view-subtitle--es">🇪🇸 {coffee.subtitle_es}</div>}
+              {coffee.subtitle_es && (
+                <div className="view-subtitle-es-wrap">
+                  <span className="view-lang-tag">🇪🇸</span>
+                  <span className="view-subtitle view-subtitle--es">{coffee.subtitle_es}</span>
+                </div>
+              )}
               {coffee.slug && <div className="view-slug">/coffee/{coffee.slug}</div>}
             </div>
           </div>
@@ -427,12 +472,14 @@ function ViewPanel({ coffee, onBack, onEdit }) {
               <div className="card__header"><span className="card__icon">📖</span><span className="card__title">Description</span></div>
               <div className="card__body">
                 {coffee.description && (
-                  <div className="view-description">{coffee.description}</div>
+                  <div className="view-description md-rendered"
+                    dangerouslySetInnerHTML={{__html: renderMarkdown(coffee.description)}} />
                 )}
                 {coffee.description_es && (
-                  <div className="view-description view-description--es">
-                    <span className="view-field-label" style={{display:'block',marginBottom:6}}>🇪🇸 Español</span>
-                    {coffee.description_es}
+                  <div className="view-description-es-block">
+                    <div className="view-lang-divider"><span className="view-lang-tag">🇪🇸 Español</span></div>
+                    <div className="view-description view-description--es md-rendered"
+                      dangerouslySetInnerHTML={{__html: renderMarkdown(coffee.description_es)}} />
                   </div>
                 )}
               </div>
@@ -585,12 +632,17 @@ function FormPanel({ form, updateField, setSlugManual, saveCoffee, closeForm, cu
             </Card>
 
             <Card icon="📖" title="Description">
-              <Field label="Description (EN)">
-                <textarea className="textarea-input" style={{minHeight:120}} value={form.description} onChange={e => updateField('description', e.target.value)} />
-              </Field>
-              <Field label="Description (ES) 🇪🇸">
-                <textarea className="textarea-input" style={{minHeight:120}} value={form.description_es || ''} onChange={e => updateField('description_es', e.target.value)} placeholder="Descripción en español…" />
-              </Field>
+              <MarkdownField
+                label="Description (EN)"
+                value={form.description}
+                onChange={v => updateField('description', v)}
+              />
+              <MarkdownField
+                label="Description (ES) 🇪🇸"
+                value={form.description_es || ''}
+                onChange={v => updateField('description_es', v)}
+                placeholder="Descripción en español…"
+              />
             </Card>
 
             <Card icon="☕" title="Coffee Details">
@@ -697,18 +749,19 @@ function FormPanel({ form, updateField, setSlugManual, saveCoffee, closeForm, cu
               </Field>
             </Card>
 
-            <div className="card">
-              <div className="form-actions">
-                <button type="button" className="btn btn--ghost btn--sm"
-                  onClick={() => setPendingDeleteId(currentId)}
-                  style={{display: currentId ? 'block' : 'none', color:'var(--red)'}}>Delete</button>
-                <div className="form-actions__spacer" />
-                <button type="button" className="btn btn--ghost btn--sm" onClick={closeForm}>Cancel</button>
-                <button type="submit" className="btn btn--primary">Save Coffee</button>
-              </div>
-            </div>
           </div>
 
+        </div>
+
+        {/* ── Full-width actions row ── */}
+        <div className="form-actions-row">
+          {currentId
+            ? <button type="button" className="btn btn--danger btn--sm" onClick={() => setPendingDeleteId(currentId)}>🗑️ Delete</button>
+            : <div />
+          }
+          <div style={{flex:1}} />
+          <button type="button" className="btn btn--ghost btn--sm" onClick={closeForm}>Cancel</button>
+          <button type="submit" className="btn btn--primary">Save Coffee</button>
         </div>
       </form>
     </div>
@@ -753,6 +806,29 @@ function PricingCard({ form, updateField }) {
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Markdown field (edit / preview tabs) ─────────────────────────────────────
+function MarkdownField({ label, value, onChange, placeholder, minHeight = 130 }) {
+  const [preview, setPreview] = useState(false);
+  return (
+    <div className="field">
+      <div className="md-header">
+        <label style={{margin:0}}>{label}</label>
+        <div className="md-tabs">
+          <button type="button" className={`md-tab${!preview ? ' md-tab--active' : ''}`} onClick={() => setPreview(false)}>Edit</button>
+          <button type="button" className={`md-tab${preview  ? ' md-tab--active' : ''}`} onClick={() => setPreview(true)}>Preview</button>
+        </div>
+      </div>
+      {preview
+        ? <div className="md-preview" style={{minHeight}}
+            dangerouslySetInnerHTML={{__html: renderMarkdown(value) || '<p class="md-empty">Nothing to preview</p>'}} />
+        : <textarea className="textarea-input" style={{minHeight}}
+            value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+      }
+      <div className="field-hint">**bold** &nbsp;·&nbsp; *italic* &nbsp;·&nbsp; # heading &nbsp;·&nbsp; - list item</div>
     </div>
   );
 }
