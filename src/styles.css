@@ -787,6 +787,77 @@
     /* ─── CLICKABLE TABLE ROWS ───────────────── */
     .tr--clickable { cursor: pointer; }
 
+    /* ─── HIDDEN BADGE (list view) ──────────── */
+    .td-name-row { display: flex; align-items: center; gap: 7px; }
+    .hidden-badge {
+      font-size: 0.58rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      background: #fef2f2;
+      color: var(--red);
+      border: 1px solid #fecaca;
+      border-radius: 4px;
+      padding: 2px 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* ─── VISIBILITY WARNING BANNER ─────────── */
+    .visibility-warning {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: var(--r);
+      padding: 11px 16px;
+      font-size: 0.85rem;
+      color: #92400e;
+      margin-bottom: 20px;
+    }
+
+    /* ─── VISIBLE TOGGLE IN FORM ─────────────── */
+    .visible-toggle-row {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .visible-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .visible-toggle input[type="checkbox"] { display: none; }
+    .visible-toggle__track {
+      width: 36px;
+      height: 20px;
+      border-radius: 10px;
+      background: #d1d5db;
+      position: relative;
+      flex-shrink: 0;
+      transition: background var(--ease);
+    }
+    .visible-toggle__track::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform var(--ease);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .visible-toggle--on  .visible-toggle__track { background: var(--green); }
+    .visible-toggle--on  .visible-toggle__track::after { transform: translateX(16px); }
+    .visible-toggle__label {
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .visible-toggle--on  .visible-toggle__label { color: var(--green); }
+    .visible-toggle--off .visible-toggle__label { color: var(--red); }
+
     /* ─── FORM ACTIONS BOTTOM ROW ────────────── */
     .form-actions-row {
       display: flex;

@@ -170,6 +170,9 @@ function rowToApp(row) {
     sale250g:      parseMoney(row[C.SALE_250G]),
     subtitle_es:    String(row[C.SUBTITLE_ES]    || ''),
     description_es: String(row[C.DESCRIPTION_ES] || ''),
+    visible: (row[C.VISIBLE] === true
+           || String(row[C.VISIBLE]).toUpperCase() === 'TRUE'
+           || String(row[C.VISIBLE]).toUpperCase() === 'YES'),
     updatedAt:      new Date().toISOString()
   };
 }
@@ -207,6 +210,7 @@ function applyToRow(row, coffee) {
   if (coffee.sale250g     !== undefined) row[C.SALE_250G]      = coffee.sale250g     === '' ? '' : Number(coffee.sale250g)     || '';
   if (coffee.subtitle_es    !== undefined) row[C.SUBTITLE_ES]    = coffee.subtitle_es    || '';
   if (coffee.description_es !== undefined) row[C.DESCRIPTION_ES] = coffee.description_es || '';
+  if (coffee.visible        !== undefined) row[C.VISIBLE]        = coffee.visible === true || coffee.visible === 'true';
   return row;
 }
 

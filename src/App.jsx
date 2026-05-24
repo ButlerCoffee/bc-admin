@@ -28,6 +28,7 @@ const emptyCoffee = {
   image: '',
   cost1kg: '', cost500g: '', cost250g: '',
   sale1kg: '', sale500g: '', sale250g: '',
+  visible: true,
   updatedAt: ''
 };
 
@@ -45,7 +46,7 @@ const CSV_COLS = [
   'variety','process','roast','roaster','level','bagSizes',
   'image',
   'cost1kg','cost500g','cost250g','sale1kg','sale500g','sale250g',
-  'updatedAt'
+  'visible','updatedAt'
 ];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -115,7 +116,8 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('');
   const [roasterFilter, setRoasterFilter] = useState('');
-  const [originFilter, setOriginFilter] = useState(''); // 'blend' | 'single' | ''
+  const [originFilter, setOriginFilter] = useState('');     // 'blend' | 'single' | ''
+  const [visibilityFilter, setVisibilityFilter] = useState(''); // '' | 'visible' | 'hidden'
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
@@ -145,11 +147,15 @@ export default function App() {
     const originMatch = !originFilter
       || (originFilter === 'blend'  && isBlend)
       || (originFilter === 'single' && !isBlend);
+    const visMatch = !visibilityFilter
+      || (visibilityFilter === 'visible' &&  c.visible)
+      || (visibilityFilter === 'hidden'  && !c.visible);
     return textMatch
       && (!levelFilter  || c.level   === levelFilter)
       && (!roasterFilter || c.roaster === roasterFilter)
-      && originMatch;
-  }), [coffees, search, levelFilter, roasterFilter, originFilter]);
+      && originMatch
+      && visMatch;
+  }), [coffees, search, levelFilter, roasterFilter, originFilter, visibilityFilter]);
 
   const stats = useMemo(() => coffees.reduce((acc, c) => {
     const key = c.level || 'Unlabeled'; acc[key] = (acc[key] || 0) + 1; return acc;
@@ -296,7 +302,7 @@ export default function App() {
       </div>
       <div className="content">
         {panel === 'list'
-          ? <ListPanel {...{ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, originFilter, setOriginFilter, filtered, openForm, openView, setPendingDeleteId }} />
+          ? <ListPanel {...{ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, originFilter, setOriginFilter, visibilityFilter, setVisibilityFilter, filtered, openForm, openView, setPendingDeleteId }} />
           : panel === 'view'
           ? <ViewPanel coffee={coffees.find(c => c.id === currentId)} onBack={closeForm} onEdit={openForm} />
           : <FormPanel {...{ form, updateField, slugManual, setSlugManual, saveCoffee, closeForm, currentId, setPendingDeleteId, onImageUpload: handleImageUpload }} />
@@ -330,7 +336,7 @@ export default function App() {
 }
 
 // ── List Panel ────────────────────────────────────────────────────────────────
-function ListPanel({ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, originFilter, setOriginFilter, filtered, openForm, openView, setPendingDeleteId }) {
+function ListPanel({ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, originFilter, setOriginFilter, visibilityFilter, setVisibilityFilter, filtered, openForm, openView, setPendingDeleteId }) {
   function toggleLevel(level) {
     setLevelFilter(prev => prev === level ? '' : level);
   }
@@ -366,6 +372,11 @@ function ListPanel({ stats, search, setSearch, levelFilter, setLevelFilter, roas
           <option value="single">Single Origin only</option>
           <option value="blend">Blends only</option>
         </select>
+        <select className="filter-select" value={visibilityFilter} onChange={e => setVisibilityFilter(e.target.value)}>
+          <option value="">All visibility</option>
+          <option value="visible">Visible only</option>
+          <option value="hidden">Hidden only</option>
+        </select>
         <select className="filter-select" value={roasterFilter} onChange={e => setRoasterFilter(e.target.value)}>
           <option value="">All roasters</option>
           <option value="DABOV Specialty Coffee">DABOV Specialty Coffee</option>
@@ -386,7 +397,10 @@ function ListPanel({ stats, search, setSearch, levelFilter, setLevelFilter, roas
           <tbody>{filtered.map(c => (
             <tr key={c.id} className="tr--clickable" onClick={() => openView(c.id)}>
               <td>
-                <div className="td-name">{c.name || '—'}</div>
+                <div className="td-name-row">
+                  <span className="td-name">{c.name || '—'}</span>
+                  {!c.visible && <span className="hidden-badge">HIDDEN</span>}
+                </div>
                 {c.subtitle && <div className="td-sub">{c.subtitle}</div>}
               </td>
               <td>{c.level ? <span className={`level-badge ${LEVEL_CLASSES[c.level]||''}`}>{c.level.replace(' Coffee','')}</span> : '—'}</td>
@@ -448,6 +462,13 @@ function ViewPanel({ coffee, onBack, onEdit }) {
         <button className="btn btn--ghost btn--sm" style={{marginLeft:'auto'}} onClick={() => onEdit(coffee.id)}>✏️ Edit</button>
       </div>
 
+      {!coffee.visible && (
+        <div className="visibility-warning">
+          <span>⚠️</span>
+          <span>This coffee is <strong>not visible</strong> on the public website.</span>
+        </div>
+      )}
+
       <div className="form-grid">
 
         {/* ── LEFT COLUMN ── */}
@@ -456,7 +477,12 @@ function ViewPanel({ coffee, onBack, onEdit }) {
             <div className="card__header"><span className="card__icon">✏️</span><span className="card__title">Identity</span></div>
             <div className="card__body">
               <div className="view-name">{coffee.name}</div>
-              {coffee.subtitle && <div className="view-subtitle">{coffee.subtitle}</div>}
+              {coffee.subtitle && (
+                <div className="view-subtitle-es-wrap">
+                  <span className="view-lang-tag">🇨🇦</span>
+                  <span className="view-subtitle">{coffee.subtitle}</span>
+                </div>
+              )}
               {coffee.subtitle_es && (
                 <div className="view-subtitle-es-wrap">
                   <span className="view-lang-tag">🇪🇸</span>
@@ -472,8 +498,11 @@ function ViewPanel({ coffee, onBack, onEdit }) {
               <div className="card__header"><span className="card__icon">📖</span><span className="card__title">Description</span></div>
               <div className="card__body">
                 {coffee.description && (
-                  <div className="view-description md-rendered"
-                    dangerouslySetInnerHTML={{__html: renderMarkdown(coffee.description)}} />
+                  <div className="view-description-es-block" style={{paddingTop:0,borderTop:'none',marginTop:0}}>
+                    <div className="view-lang-divider"><span className="view-lang-tag">🇨🇦 English</span></div>
+                    <div className="view-description md-rendered"
+                      dangerouslySetInnerHTML={{__html: renderMarkdown(coffee.description)}} />
+                  </div>
                 )}
                 {coffee.description_es && (
                   <div className="view-description-es-block">
@@ -614,7 +643,7 @@ function FormPanel({ form, updateField, setSlugManual, saveCoffee, closeForm, cu
                 <input className="input" required value={form.name} onChange={e => updateField('name', e.target.value)} />
               </Field>
               <div className="field-row">
-                <Field label="Subtitle (EN)">
+                <Field label="Subtitle (EN) 🇨🇦">
                   <input className="input" value={form.subtitle} onChange={e => updateField('subtitle', e.target.value)} />
                 </Field>
                 <Field label="Subtitle (ES) 🇪🇸">
@@ -633,7 +662,7 @@ function FormPanel({ form, updateField, setSlugManual, saveCoffee, closeForm, cu
 
             <Card icon="📖" title="Description">
               <MarkdownField
-                label="Description (EN)"
+                label="Description (EN) 🇨🇦"
                 value={form.description}
                 onChange={v => updateField('description', v)}
               />
@@ -720,6 +749,15 @@ function FormPanel({ form, updateField, setSlugManual, saveCoffee, closeForm, cu
                   ))}
                 </div>
               </Field>
+              <div className="visible-toggle-row">
+                <label className={`visible-toggle${form.visible ? ' visible-toggle--on' : ' visible-toggle--off'}`}>
+                  <input type="checkbox" checked={!!form.visible} onChange={e => updateField('visible', e.target.checked)} />
+                  <span className="visible-toggle__track" />
+                  <span className="visible-toggle__label">
+                    {form.visible ? '✓ Visible on website' : '⚠ Hidden from website'}
+                  </span>
+                </label>
+              </div>
             </Card>
 
             <PricingCard form={form} updateField={updateField} />
