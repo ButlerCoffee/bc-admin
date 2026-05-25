@@ -265,7 +265,8 @@ function doPost(e) {
     if (body.sheet === 'subs') {
       if (body.action === 'save')        return handleSaveSub(body.subscription);
       if (body.action === 'delete')      return handleDeleteSub(body.id);
-      if (body.action === 'uploadImage') return handleUploadImage(body.filename, body.mimeType, body.data);
+      if (body.action === 'import')      return handleImportSubs(body.subscriptions);
+      if (body.action === 'uploadImage') return handleUploadImage(body.filename, body.mimeType, body.data, 'Butler Subscription Images');
       return jsonOut({ ok: false, error: 'Unknown subs action: ' + body.action });
     }
 
@@ -331,21 +332,28 @@ function handleDelete(id) {
 
 // ─── Image Upload to Drive ────────────────────────────────────────────────────
 
-function handleUploadImage(filename, mimeType, base64data) {
+/**
+ * Upload a base64-encoded image to a Drive folder.
+ * @param {string} filename
+ * @param {string} mimeType
+ * @param {string} base64data
+ * @param {string} [folderName] — defaults to 'Butler Coffee Images'
+ */
+function handleUploadImage(filename, mimeType, base64data, folderName) {
   try {
-    const bytes = Utilities.base64Decode(base64data);
-    const blob  = Utilities.newBlob(bytes, mimeType, filename || 'coffee-image');
+    const bytes  = Utilities.base64Decode(base64data);
+    const blob   = Utilities.newBlob(bytes, mimeType, filename || 'butler-image');
+    const name   = folderName || 'Butler Coffee Images';
 
-    // Store in a dedicated folder — created automatically on first use
-    let folder;
-    const folders = DriveApp.getFoldersByName('Butler Coffee Images');
-    folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Butler Coffee Images');
+    // Find or create the target folder
+    const it     = DriveApp.getFoldersByName(name);
+    const folder = it.hasNext() ? it.next() : DriveApp.createFolder(name);
 
-    const file = folder.createFile(blob);
+    const file   = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
     const fileId = file.getId();
-    const url = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w400';
+    const url    = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w400';
     return jsonOut({ ok: true, data: { url: url, fileId: fileId } });
   } catch (err) {
     return jsonOut({ ok: false, error: 'Image upload failed: ' + err.message });
@@ -578,4 +586,33 @@ function handleDeleteSub(id) {
     }
   }
   return jsonOut({ ok: false, error: 'Row not found for id: ' + id });
+}
+
+// ─── Subs Import (bulk replace) ───────────────────────────────────────────────
+
+function handleImportSubs(subs) {
+  if (!Array.isArray(subs) || subs.length === 0) {
+    return jsonOut({ ok: false, error: 'No subscriptions provided for import' });
+  }
+
+  const sheet   = getSheetSubs();
+  const lastRow = sheet.getLastRow();
+
+  // Delete all data rows — keep row 1 (headers) and row 2 (template)
+  if (lastRow > 2) {
+    sheet.deleteRows(3, lastRow - 2);
+  }
+
+  const rows = subs.map(function(sub, i) {
+    const newRow = new Array(TOTAL_COLS_SUBS).fill('');
+    newRow[SC.ID] = i + 1;
+    applyToRowSub(newRow, sub);
+    return newRow;
+  });
+
+  if (rows.length > 0) {
+    sheet.getRange(3, 1, rows.length, TOTAL_COLS_SUBS).setValues(rows);
+  }
+
+  return jsonOut({ ok: true, data: subs });
 }

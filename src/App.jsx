@@ -297,10 +297,10 @@ export default function App({ onBackToHub }) {
           <button
             className={`nav-link${panel === 'subs' ? ' active' : ''}`}
             onClick={() => setPanel('subs')}
-            title="Subscriptions"
+            title="Subscription Levels"
           >
             <span className="nav-link__icon"><i className="fa-solid fa-layer-group" /></span>
-            {!sc && <span>Subscriptions</span>}
+            {!sc && <span>Sub Levels</span>}
           </button>
           <button className="nav-link nav-link--soon" title="Coming soon">
             <span className="nav-link__icon"><i className="fa-solid fa-gears" /></span>
@@ -364,7 +364,7 @@ export default function App({ onBackToHub }) {
           <span className="topbar__title">
             {panel === 'home'   ? 'Butler Coffee'
               : panel === 'labels' ? 'Label Generator'
-              : panel === 'subs'   ? 'Subscriptions'
+              : panel === 'subs'   ? 'Subscription Levels'
               : 'Coffee'}
           </span>
           {isCoffeePanel && <span className="topbar__count">{coffees.length} entr{coffees.length === 1 ? 'y' : 'ies'}</span>}
@@ -434,8 +434,8 @@ function HomePanel({ setPanel }) {
     {
       id: 'subs',
       icon: 'fa-layer-group',
-      title: 'Subscriptions',
-      description: 'Subscription tiers, pricing & buy links',
+      title: 'Subscription Levels',
+      description: 'Tier content, pricing & buy links',
       soon: false,
     },
     {

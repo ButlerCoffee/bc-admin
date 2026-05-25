@@ -1,7 +1,9 @@
 /**
- * SubscriptionPanel — content-only component.
- * Rendered inside App.jsx's existing sidebar + main layout
- * when panel === 'subs'. No sidebar/topbar of its own.
+ * SubscriptionPanel — content-only component for Subscription Levels.
+ * Rendered inside App.jsx's sidebar + main layout when panel === 'subs'.
+ *
+ * Images are uploaded to Google Drive via the GAS backend
+ * (stored in the "Butler Subscription Images" folder).
  */
 import { useEffect, useMemo, useState } from 'react';
 import { apiCall } from './lib/api.js';
@@ -12,11 +14,55 @@ const DEFAULT_IMAGE = `https://drive.google.com/thumbnail?id=${DRIVE_IMG_FALLBAC
 
 function toImageUrl(url) {
   if (!url) return DEFAULT_IMAGE;
+  // Blob previews and any direct HTTPS URL — use as-is
+  if (url.startsWith('blob:') || /^https?:\/\//.test(url)) return url;
+  // Drive URL patterns → convert to thumbnail embed
   const m = url.match(/(?:\/d\/|[?&]id=)([a-zA-Z0-9_-]{20,})/);
   if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400`;
+  // Bare file ID
   if (/^[a-zA-Z0-9_-]{20,}$/.test(url.trim()))
     return `https://drive.google.com/thumbnail?id=${url.trim()}&sz=w400`;
   return url;
+}
+
+// ── Canvas resize + compress ──────────────────────────────────────────────────
+// Reduces large images before base64-encoding them for the GAS/Drive upload.
+const MAX_INPUT_BYTES = 10 * 1024 * 1024; // 10 MB hard cap
+const MAX_WARN_BYTES  =  5 * 1024 * 1024; // warn at 5 MB
+const MAX_WIDTH_PX    = 1200;
+const JPEG_QUALITY    = 0.85;
+
+/** Resize + compress a File to a base64 JPEG string. Returns { base64, warnMsg }. */
+async function resizeToBase64(file) {
+  if (file.size > MAX_INPUT_BYTES) {
+    throw new Error(`Image is ${(file.size / 1024 / 1024).toFixed(1)} MB — max input size is 10 MB. Please resize the file first.`);
+  }
+  const warnMsg = file.size > MAX_WARN_BYTES
+    ? `Large file (${(file.size / 1024 / 1024).toFixed(1)} MB) — compressing…`
+    : null;
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objUrl);
+      const scale = Math.min(1, MAX_WIDTH_PX / img.width);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        if (!blob) { reject(new Error('Canvas compression failed')); return; }
+        const reader = new FileReader();
+        reader.onload = ev => resolve({ base64: ev.target.result.split(',')[1], warnMsg });
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', JPEG_QUALITY);
+    };
+    img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error('Could not load image')); };
+    img.src = objUrl;
+  });
 }
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
@@ -57,74 +103,92 @@ const emptySub = {
   image: '', updatedAt: ''
 };
 
-// All four sizes; the form shows all but hints which tier uses which
-const ALL_SIZES = [
-  { key: '200g', label: '200 g', hint: 'Summit only'      },
-  { key: '250g', label: '250 g', hint: 'Base · Explorer · Alpine' },
-  { key: '500g', label: '500 g', hint: 'Base · Explorer · Alpine' },
-  { key: '1kg',  label: '1 kg',  hint: 'Base · Explorer · Alpine' },
+// ── Smart sizing — Summit gets 200g only; all others get 250g/500g/1kg ────────
+const SUMMIT_SIZES = [{ key: '200g', label: '200 g' }];
+const OTHER_SIZES  = [
+  { key: '250g', label: '250 g' },
+  { key: '500g', label: '500 g' },
+  { key: '1kg',  label: '1 kg'  },
 ];
+function sizesFor(title) {
+  return (title || '').toLowerCase().includes('summit') ? SUMMIT_SIZES : OTHER_SIZES;
+}
 
 // ── Main component (content only) ─────────────────────────────────────────────
 export default function SubscriptionPanel() {
-  const [subs,   setSubs]   = useState([]);
+  const [subs,    setSubs]    = useState([]);
   const [loading, setLoading] = useState(false);
   const [toasts,  setToasts]  = useState([]);
   const [subPanel, setSubPanel] = useState('list');   // 'list' | 'view' | 'form'
   const [currentId, setCurrentId] = useState(null);
   const [form, setForm] = useState(emptySub);
   const [search, setSearch] = useState('');
-  const [pendingDeleteId,  setPendingDeleteId]  = useState(null);
+  const [pendingDeleteId,   setPendingDeleteId]   = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   function toast(msg, type = 'success') {
     const id = Date.now() + Math.random();
     setToasts(t => [...t, { id, msg, type }]);
-    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3500);
   }
 
-  async function loadFromSheet(showToast = false) {
+  // ── Pull from sheet ──────────────────────────────────────────────────────────
+  async function pullFromSheet(showToast = false) {
     setLoading(true);
     try {
       const data = await apiCall('GET', undefined, 'subs');
       setSubs(Array.isArray(data) ? data : []);
-      if (showToast) toast('Synced from Google Sheet!');
+      if (showToast) toast('Pulled latest from Google Sheet!');
     } catch (err) {
-      toast('Could not sync — check API URL.', 'error');
+      toast('Could not connect to Sheet — check API URL.', 'error');
     } finally { setLoading(false); }
   }
-  useEffect(() => { loadFromSheet(); }, []);
+  useEffect(() => { pullFromSheet(); }, []);
+
+  // ── Push all to sheet ────────────────────────────────────────────────────────
+  async function pushToSheet() {
+    if (!subs.length) { toast('Nothing to push — no tiers loaded.', 'error'); return; }
+    if (!window.confirm(`Push all ${subs.length} tier(s) to Google Sheet?\n\nThis will overwrite the sheet's data rows. Pull first if you have unsaved sheet edits.`)) return;
+    setLoading(true);
+    try {
+      await apiCall('POST', { action: 'import', subscriptions: subs }, 'subs');
+      toast(`Pushed ${subs.length} tier(s) to Google Sheet!`);
+    } catch (err) {
+      toast(`Push failed — ${err.message}`, 'error');
+    } finally { setLoading(false); }
+  }
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return !q ? subs : subs.filter(s =>
-      [s.title, s.eyebrowEN, s.shortDescEN].some(v => (v||'').toLowerCase().includes(q))
+      [s.title, s.eyebrowEN, s.shortDescEN].some(v => (v || '').toLowerCase().includes(q))
     );
   }, [subs, search]);
 
   function updateField(key, value) { setForm(f => ({ ...f, [key]: value })); }
 
-  function openView(id) { setCurrentId(id); setSubPanel('view'); window.scrollTo(0,0); }
+  function openView(id) { setCurrentId(id); setSubPanel('view'); window.scrollTo(0, 0); }
   function openForm(id = null) {
     const sub = id ? subs.find(s => s.id === id) : null;
     setCurrentId(id);
     setForm(sub ? { ...emptySub, ...sub } : emptySub);
     setSubPanel('form');
-    window.scrollTo(0,0);
+    window.scrollTo(0, 0);
   }
   function closeForm() { setSubPanel('list'); setCurrentId(null); setForm(emptySub); }
 
+  // ── Save individual tier ─────────────────────────────────────────────────────
   async function saveSub(e) {
     e.preventDefault();
     const sub = { ...form, updatedAt: new Date().toISOString() };
-    if (!sub.id) sub.id = `sub_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+    if (!sub.id) sub.id = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     setLoading(true);
     try {
       const saved = await apiCall('POST', { action: 'save', subscription: sub }, 'subs');
       setSubs(prev => prev.some(s => s.id === saved.id)
         ? prev.map(s => s.id === saved.id ? saved : s)
         : [saved, ...prev]);
-      toast('Subscription tier saved!');
+      toast('Subscription level saved!');
       closeForm();
     } catch (err) { toast(`Save failed — ${err.message}`, 'error'); }
     finally { setLoading(false); }
@@ -144,34 +208,43 @@ export default function SubscriptionPanel() {
     finally { setLoading(false); }
   }
 
+  // ── Image upload — resize via canvas, then send to GAS → Google Drive ────────
   async function handleImageUpload(e) {
     const file = e.target.files?.[0]; if (!file) return;
     e.target.value = '';
-    const reader = new FileReader();
-    reader.onload = async ev => {
-      const dataUrl = ev.target.result;
-      setForm(f => ({ ...f, image: dataUrl }));
-      setLoading(true);
-      try {
-        const base64 = dataUrl.split(',')[1];
-        const result = await apiCall('POST', { action: 'uploadImage', filename: file.name, mimeType: file.type, data: base64 }, 'subs');
-        setForm(f => ({ ...f, image: result.url }));
-        toast('Image uploaded to Drive!');
-      } catch (err) { toast(`Upload failed — ${err.message}`, 'error'); }
-      finally { setLoading(false); }
-    };
-    reader.readAsDataURL(file);
+    // Immediate local blob preview
+    const blobUrl = URL.createObjectURL(file);
+    setForm(f => ({ ...f, image: blobUrl }));
+    setLoading(true);
+    try {
+      const { base64, warnMsg } = await resizeToBase64(file);
+      if (warnMsg) toast(warnMsg);
+      const safeName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+      const result = await apiCall('POST', {
+        action: 'uploadImage',
+        filename: safeName,
+        mimeType: 'image/jpeg',
+        data: base64,
+      }, 'subs');
+      setForm(f => ({ ...f, image: result.url }));
+      URL.revokeObjectURL(blobUrl);
+      toast('Image uploaded to Google Drive!');
+    } catch (err) {
+      toast(`Upload failed — ${err.message}`, 'error');
+      setForm(f => ({ ...f, image: '' }));
+      URL.revokeObjectURL(blobUrl);
+    } finally { setLoading(false); }
   }
 
   return <>
-    {/* ── content panels ── */}
     {subPanel === 'list' && (
       <SubsListPanel
         search={search} setSearch={setSearch}
         filtered={filtered} total={subs.length}
         openForm={openForm} openView={openView}
         setPendingDeleteId={setPendingDeleteId}
-        onSync={() => loadFromSheet(true)}
+        onPull={() => pullFromSheet(true)}
+        onPush={pushToSheet}
       />
     )}
     {subPanel === 'view' && (
@@ -190,15 +263,13 @@ export default function SubscriptionPanel() {
       />
     )}
 
-    {/* ── loading overlay ── */}
     {loading && (
-      <div className="loading-overlay" style={{ display:'flex' }}>
+      <div className="loading-overlay" style={{ display: 'flex' }}>
         <div className="loading-spinner" />
-        <div className="loading-label">Syncing with Google Sheet…</div>
+        <div className="loading-label">Syncing…</div>
       </div>
     )}
 
-    {/* ── toasts ── */}
     <div className="toast-wrap">
       {toasts.map(t => (
         <div key={t.id} className={`toast toast--${t.type}`}>
@@ -207,12 +278,11 @@ export default function SubscriptionPanel() {
       ))}
     </div>
 
-    {/* ── delete confirmation ── */}
     {pendingDeleteId && (
       <div className="dialog-overlay open">
         <div className="dialog">
           <div className="dialog__title">Delete this tier?</div>
-          <div className="dialog__text">This permanently removes the entry. It cannot be undone.</div>
+          <div className="dialog__text">This permanently removes the entry from the database. It cannot be undone.</div>
           <div className="dialog__confirm">
             <label className="dialog__confirm-label">Type DELETE to confirm</label>
             <input className="input" type="text" value={deleteConfirmText}
@@ -231,70 +301,76 @@ export default function SubscriptionPanel() {
 }
 
 // ── List Panel ────────────────────────────────────────────────────────────────
-function SubsListPanel({ search, setSearch, filtered, total, openForm, openView, setPendingDeleteId, onSync }) {
+function SubsListPanel({ search, setSearch, filtered, total, openForm, openView, setPendingDeleteId, onPull, onPush }) {
   return (
     <div id="list-panel">
       <div className="toolbar">
         <div className="search-wrap">
           <span className="search-wrap__icon">🔍</span>
-          <input className="search-input" type="search" placeholder="Search tiers…"
+          <input className="search-input" type="search" placeholder="Search levels…"
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <button className="btn btn--primary" onClick={() => openForm(null)}>+ Add Tier</button>
-        <button className="btn btn--ghost btn--sm" onClick={onSync} title="Sync from Sheet">
-          <i className="fa-solid fa-rotate" /> Sync
+        <button className="btn btn--primary" onClick={() => openForm(null)}>+ Add Level</button>
+        <button className="btn btn--ghost btn--sm" onClick={onPull} title="Pull latest from Google Sheet">
+          <i className="fa-solid fa-cloud-arrow-down" style={{marginRight:5}} />Pull
+        </button>
+        <button className="btn btn--ghost btn--sm" onClick={onPush} title="Push all local tiers to Google Sheet">
+          <i className="fa-solid fa-cloud-arrow-up" style={{marginRight:5}} />Push
         </button>
       </div>
 
       <div className="table-wrap">
         <table>
           <thead><tr>
-            <th style={{width:64}}>Image</th>
+            <th style={{ width: 64 }}>Image</th>
             <th>Tier</th>
             <th>Eyebrow (EN)</th>
             <th>Short Description</th>
             <th>Prices</th>
-            <th style={{width:116}}>Actions</th>
+            <th style={{ width: 116 }}>Actions</th>
           </tr></thead>
           <tbody>
-            {filtered.map(s => (
-              <tr key={s.id} className="tr--clickable" onClick={() => openView(s.id)}>
-                <td>
-                  <div style={{width:48,height:48,borderRadius:8,overflow:'hidden',background:'var(--surface-2)',flexShrink:0}}>
-                    <img src={toImageUrl(s.image)} alt={s.title}
-                      style={{width:'100%',height:'100%',objectFit:'cover'}}
-                      onError={e => { e.currentTarget.style.display='none'; }} />
-                  </div>
-                </td>
-                <td><div className="td-name">{s.title || '—'}</div></td>
-                <td style={{color:'var(--muted)',fontSize:'0.8rem'}}>{s.eyebrowEN || '—'}</td>
-                <td style={{color:'var(--muted)',fontSize:'0.8rem',maxWidth:200}}>
-                  <div style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.shortDescEN || '—'}</div>
-                </td>
-                <td>
-                  <div className="size-chips">
-                    {s.price200g && <span className="size-chip">200g €{s.price200g}</span>}
-                    {s.price250g && <span className="size-chip">250g €{s.price250g}</span>}
-                    {s.price500g && <span className="size-chip">500g €{s.price500g}</span>}
-                    {s.price1kg  && <span className="size-chip">1kg €{s.price1kg}</span>}
-                    {!s.price200g && !s.price250g && !s.price500g && !s.price1kg && '—'}
-                  </div>
-                </td>
-                <td><div className="td-actions" onClick={e => e.stopPropagation()}>
-                  <button className="btn btn--ghost btn--sm btn--icon" onClick={() => openView(s.id)} title="View">👁️</button>
-                  <button className="btn btn--ghost btn--sm btn--icon" onClick={() => openForm(s.id)} title="Edit">✏️</button>
-                  <button className="btn btn--ghost btn--sm btn--icon" style={{color:'var(--red)'}}
-                    onClick={() => setPendingDeleteId(s.id)} title="Delete">🗑️</button>
-                </div></td>
-              </tr>
-            ))}
+            {filtered.map(s => {
+              const sizes = sizesFor(s.title);
+              return (
+                <tr key={s.id} className="tr--clickable" onClick={() => openView(s.id)}>
+                  <td>
+                    <div style={{ width: 48, height: 48, borderRadius: 8, overflow: 'hidden', background: 'var(--surface-2)', flexShrink: 0 }}>
+                      <img src={toImageUrl(s.image)} alt={s.title}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={e => { e.currentTarget.style.display = 'none'; }} />
+                    </div>
+                  </td>
+                  <td><div className="td-name">{s.title || '—'}</div></td>
+                  <td style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{s.eyebrowEN || '—'}</td>
+                  <td style={{ color: 'var(--muted)', fontSize: '0.8rem', maxWidth: 200 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.shortDescEN || '—'}</div>
+                  </td>
+                  <td>
+                    <div className="size-chips">
+                      {sizes.map(({ key, label }) => s[`price${key}`]
+                        ? <span className="size-chip" key={key}>{label} €{s[`price${key}`]}</span>
+                        : null
+                      )}
+                      {sizes.every(({ key }) => !s[`price${key}`]) && '—'}
+                    </div>
+                  </td>
+                  <td><div className="td-actions" onClick={e => e.stopPropagation()}>
+                    <button className="btn btn--ghost btn--sm btn--icon" onClick={() => openView(s.id)} title="View">👁️</button>
+                    <button className="btn btn--ghost btn--sm btn--icon" onClick={() => openForm(s.id)} title="Edit">✏️</button>
+                    <button className="btn btn--ghost btn--sm btn--icon" style={{ color: 'var(--red)' }}
+                      onClick={() => setPendingDeleteId(s.id)} title="Delete">🗑️</button>
+                  </div></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {filtered.length === 0 && (
           <div className="empty-state">
             <div className="empty-state__icon">🦆</div>
-            <div className="empty-state__title">No subscription tiers yet</div>
-            <div className="empty-state__text">Click "+ Add Tier" to create the first one, or Sync to pull from the sheet.</div>
+            <div className="empty-state__title">No subscription levels yet</div>
+            <div className="empty-state__text">Click "+ Add Level" to create one, or Pull to sync from the sheet.</div>
           </div>
         )}
       </div>
@@ -308,7 +384,7 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
     <div className="view-panel">
       <div className="form-header">
         <button className="form-header__back" onClick={onBack}>← Back</button>
-        <h1 className="form-header__title">Tier not found</h1>
+        <h1 className="form-header__title">Level not found</h1>
       </div>
     </div>
   );
@@ -323,116 +399,83 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
     );
   }
 
+  const sizes = sizesFor(sub.title);
+
   return (
     <div className="view-panel">
       <div className="form-header">
         <button className="form-header__back" onClick={onBack}>← Back</button>
-        <h1 className="form-header__title">{sub.title || 'Untitled tier'}</h1>
-        <button className="btn btn--ghost btn--sm" style={{marginLeft:'auto'}} onClick={() => onEdit(sub.id)}>✏️ Edit</button>
+        <h1 className="form-header__title">{sub.title || 'Untitled level'}</h1>
+        <button className="btn btn--ghost btn--sm" style={{ marginLeft: 'auto' }} onClick={() => onEdit(sub.id)}>✏️ Edit</button>
       </div>
 
       <div className="form-grid">
-        {/* ── LEFT ── */}
+
+        {/* ── LEFT: Identity · Content (both langs) · Profile (both langs) ── */}
         <div>
-          {/* Image */}
+
+          {/* Tier Identity */}
           <div className="card">
-            <div className="card__header"><span className="card__icon">🖼️</span><span className="card__title">Tier Image</span></div>
-            <div className="card__body" style={{padding:0}}>
-              <div className="view-img-wrap">
-                <img src={toImageUrl(sub.image)} alt={sub.title}
-                  onError={e => { e.currentTarget.style.display='none'; }} />
-              </div>
+            <div className="card__header"><span className="card__icon">🏷️</span><span className="card__title">Tier Identity</span></div>
+            <div className="card__body">
+              <div className="view-name">{sub.title}</div>
+              {(sub.eyebrowEN || sub.eyebrowES) && (
+                <div style={{ marginTop: 6, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {sub.eyebrowEN && <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>🇨🇦 {sub.eyebrowEN}</span>}
+                  {sub.eyebrowES && <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>🇪🇸 {sub.eyebrowES}</span>}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Content EN */}
+          {/* Content — both languages */}
           <div className="card">
-            <div className="card__header"><span className="card__icon">🇨🇦</span><span className="card__title">Content — English</span></div>
+            <div className="card__header"><span className="card__icon">📝</span><span className="card__title">Content</span></div>
             <div className="card__body">
-              <VF label="Eyebrow"           value={sub.eyebrowEN} />
-              <VF label="Short Description" value={sub.shortDescEN} />
+              {/* English */}
+              <div className="view-lang-divider"><span className="view-lang-tag">🇨🇦 English</span></div>
+              <VF label="Eyebrow"     value={sub.eyebrowEN} />
+              <VF label="Short Desc"  value={sub.shortDescEN} />
               {sub.longDescEN && (
                 <div className="view-field">
                   <span className="view-field-label">Long Description</span>
                   <div className="view-description md-rendered"
-                    dangerouslySetInnerHTML={{__html: renderMarkdown(sub.longDescEN)}} />
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(sub.longDescEN) }} />
                 </div>
               )}
-              {[sub.feat01EN,sub.feat02EN,sub.feat03EN,sub.feat04EN].filter(Boolean).map((f,i) => (
-                <VF key={i} label={`Feature ${i+1}`} value={f} />
+              {[sub.feat01EN, sub.feat02EN, sub.feat03EN, sub.feat04EN].filter(Boolean).map((f, i) => (
+                <VF key={i} label={`Feature ${i + 1}`} value={f} />
+              ))}
+
+              {/* Spanish */}
+              <div className="view-lang-divider" style={{ marginTop: 16 }}><span className="view-lang-tag">🇪🇸 Español</span></div>
+              <VF label="Eyebrow"     value={sub.eyebrowES} />
+              <VF label="Short Desc"  value={sub.shortDescES} />
+              {sub.longDescES && (
+                <div className="view-field">
+                  <span className="view-field-label">Long Description</span>
+                  <div className="view-description view-description--es md-rendered"
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(sub.longDescES) }} />
+                </div>
+              )}
+              {[sub.feat01ES, sub.feat02ES, sub.feat03ES, sub.feat04ES].filter(Boolean).map((f, i) => (
+                <VF key={i} label={`Feature ${i + 1}`} value={f} />
               ))}
             </div>
           </div>
 
-          {/* Profile EN */}
+          {/* Coffee Profile — both languages */}
           <div className="card">
-            <div className="card__header"><span className="card__icon">☕</span><span className="card__title">Coffee Profile — English</span></div>
+            <div className="card__header"><span className="card__icon">☕</span><span className="card__title">Coffee Profile</span></div>
             <div className="card__body">
+              <div className="view-lang-divider"><span className="view-lang-tag">🇨🇦 English</span></div>
               <div className="view-detail-grid">
                 <VF label="Composition" value={sub.compositionEN} />
                 <VF label="Flavor"      value={sub.flavorEN} />
                 <VF label="Structure"   value={sub.structureEN} />
                 <VF label="Purpose"     value={sub.purposeEN} />
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── RIGHT ── */}
-        <div>
-          {/* Pricing */}
-          <div className="card">
-            <div className="card__header"><span className="card__icon">💶</span><span className="card__title">Pricing & Links</span></div>
-            <div className="card__body">
-              <div className="pricing-table">
-                <div className="pricing-table-header" style={{gridTemplateColumns:'70px 1fr 1fr 1fr'}}>
-                  <span>Size</span><span>Cost €</span><span>Price €</span><span>Link</span>
-                </div>
-                {ALL_SIZES.map(({ key, label }) => {
-                  const cost  = sub[`cost${key}`];
-                  const price = sub[`price${key}`];
-                  const link  = sub[`link${key}`];
-                  if (!cost && !price && !link) return null;
-                  return (
-                    <div className="pricing-row" key={key} style={{gridTemplateColumns:'70px 1fr 1fr 1fr'}}>
-                      <span className="pricing-size">{label}</span>
-                      <span className="pricing-ro">{cost  ? `€${cost}`  : '—'}</span>
-                      <span className="pricing-ro">{price ? `€${price}` : '—'}</span>
-                      <span style={{fontSize:'0.75rem'}}>
-                        {link
-                          ? <a href={link} target="_blank" rel="noreferrer" style={{color:'var(--accent)'}}>🔗 Open</a>
-                          : '—'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Content ES */}
-          <div className="card">
-            <div className="card__header"><span className="card__icon">🇪🇸</span><span className="card__title">Content — Español</span></div>
-            <div className="card__body">
-              <VF label="Eyebrow"           value={sub.eyebrowES} />
-              <VF label="Short Description" value={sub.shortDescES} />
-              {sub.longDescES && (
-                <div className="view-field">
-                  <span className="view-field-label">Long Description</span>
-                  <div className="view-description view-description--es md-rendered"
-                    dangerouslySetInnerHTML={{__html: renderMarkdown(sub.longDescES)}} />
-                </div>
-              )}
-              {[sub.feat01ES,sub.feat02ES,sub.feat03ES,sub.feat04ES].filter(Boolean).map((f,i) => (
-                <VF key={i} label={`Feature ${i+1}`} value={f} />
-              ))}
-            </div>
-          </div>
-
-          {/* Profile ES */}
-          <div className="card">
-            <div className="card__header"><span className="card__icon">☕</span><span className="card__title">Coffee Profile — Español</span></div>
-            <div className="card__body">
+              <div className="view-lang-divider" style={{ marginTop: 16 }}><span className="view-lang-tag">🇪🇸 Español</span></div>
               <div className="view-detail-grid">
                 <VF label="Composition" value={sub.compositionES} />
                 <VF label="Flavor"      value={sub.flavorES} />
@@ -441,6 +484,56 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
               </div>
             </div>
           </div>
+
+        </div>
+
+        {/* ── RIGHT: Image · Pricing ── */}
+        <div>
+
+          {/* Image */}
+          <div className="card">
+            <div className="card__header"><span className="card__icon">🖼️</span><span className="card__title">Tier Image</span></div>
+            <div className="card__body" style={{ padding: 0 }}>
+              <div className="view-img-wrap">
+                <img src={toImageUrl(sub.image)} alt={sub.title}
+                  onError={e => { e.currentTarget.style.display = 'none'; }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Pricing */}
+          <div className="card">
+            <div className="card__header"><span className="card__icon">💶</span><span className="card__title">Pricing & Links</span></div>
+            <div className="card__body">
+              <div className="pricing-table">
+                <div className="pricing-table-header" style={{ gridTemplateColumns: '70px 1fr 1fr 1fr' }}>
+                  <span>Size</span><span>Cost €</span><span>Price €</span><span>Link</span>
+                </div>
+                {sizes.map(({ key, label }) => {
+                  const cost  = sub[`cost${key}`];
+                  const price = sub[`price${key}`];
+                  const link  = sub[`link${key}`];
+                  if (!cost && !price && !link) return null;
+                  return (
+                    <div className="pricing-row" key={key} style={{ gridTemplateColumns: '70px 1fr 1fr 1fr' }}>
+                      <span className="pricing-size">{label}</span>
+                      <span className="pricing-ro">{cost  ? `€${cost}`  : '—'}</span>
+                      <span className="pricing-ro">{price ? `€${price}` : '—'}</span>
+                      <span style={{ fontSize: '0.75rem' }}>
+                        {link
+                          ? <a href={link} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>🔗 Open</a>
+                          : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
+                {sizes.every(({ key }) => !sub[`cost${key}`] && !sub[`price${key}`] && !sub[`link${key}`]) && (
+                  <div style={{ color: 'var(--muted)', fontSize: '0.85rem', padding: '8px 0' }}>No pricing set yet.</div>
+                )}
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -449,27 +542,36 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
 
 // ── Form Panel ────────────────────────────────────────────────────────────────
 function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPendingDeleteId, onImageUpload }) {
+  const sizes = sizesFor(form.title);
+
   return (
     <div id="form-panel" className="form-panel active">
       <div className="form-header">
         <button className="form-header__back" onClick={closeForm}>← Back</button>
-        <h1 className="form-header__title">{currentId ? 'Edit Tier' : 'New Tier'}</h1>
+        <h1 className="form-header__title">{currentId ? 'Edit Level' : 'New Level'}</h1>
       </div>
 
       <form onSubmit={saveSub}>
         <div className="form-grid">
 
-          {/* ── LEFT COLUMN ── */}
+          {/* ── LEFT: Identity · Content · Coffee Profile ── */}
           <div>
-            <Card icon="✏️" title="Tier Identity">
+
+            <Card icon="🏷️" title="Tier Identity">
               <Field label="Tier Title" required>
                 <input className="input" required value={form.title}
                   onChange={e => updateField('title', e.target.value)}
                   placeholder="e.g. Base, Explorer, Alpine, Summit" />
+                <div className="field-hint">Title determines which bag sizes are shown — Summit gets 200 g, all others get 250 g / 500 g / 1 kg.</div>
               </Field>
             </Card>
 
-            <Card icon="🇨🇦" title="Content — English">
+            {/* Content — both languages in one card */}
+            <Card icon="📝" title="Content">
+              {/* English */}
+              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                🇨🇦 English
+              </div>
               <Field label="Eyebrow">
                 <input className="input" value={form.eyebrowEN}
                   onChange={e => updateField('eyebrowEN', e.target.value)}
@@ -483,17 +585,50 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
               <MarkdownField label="Long Description"
                 value={form.longDescEN} onChange={v => updateField('longDescEN', v)}
                 placeholder="Full marketing copy — **bold**, *italic*, # heading, - list" />
-              <div className="field-row" style={{gridTemplateColumns:'1fr 1fr'}}>
-                {['feat01EN','feat02EN','feat03EN','feat04EN'].map((key,i) => (
-                  <Field key={key} label={`Feature ${i+1}`}>
+              <div className="field-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                {['feat01EN', 'feat02EN', 'feat03EN', 'feat04EN'].map((key, i) => (
+                  <Field key={key} label={`Feature ${i + 1}`}>
                     <input className="input" value={form[key]}
-                      onChange={e => updateField(key, e.target.value)} placeholder={`Feature ${i+1}`} />
+                      onChange={e => updateField(key, e.target.value)} placeholder={`Feature ${i + 1}`} />
+                  </Field>
+                ))}
+              </div>
+
+              {/* Divider */}
+              <div style={{ borderTop: '1px solid var(--border)', margin: '20px 0 16px' }} />
+
+              {/* Spanish */}
+              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                🇪🇸 Español
+              </div>
+              <Field label="Eyebrow">
+                <input className="input" value={form.eyebrowES}
+                  onChange={e => updateField('eyebrowES', e.target.value)}
+                  placeholder="Etiqueta corta sobre el título" />
+              </Field>
+              <Field label="Short Description">
+                <input className="input" value={form.shortDescES}
+                  onChange={e => updateField('shortDescES', e.target.value)}
+                  placeholder="Una línea para listados" />
+              </Field>
+              <MarkdownField label="Long Description"
+                value={form.longDescES} onChange={v => updateField('longDescES', v)}
+                placeholder="Descripción larga en español…" />
+              <div className="field-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                {['feat01ES', 'feat02ES', 'feat03ES', 'feat04ES'].map((key, i) => (
+                  <Field key={key} label={`Feature ${i + 1}`}>
+                    <input className="input" value={form[key]}
+                      onChange={e => updateField(key, e.target.value)} />
                   </Field>
                 ))}
               </div>
             </Card>
 
-            <Card icon="☕" title="Coffee Profile — English">
+            {/* Coffee Profile — both languages */}
+            <Card icon="☕" title="Coffee Profile">
+              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                🇨🇦 English
+              </div>
               <div className="field-row">
                 <Field label="Composition"><input className="input" value={form.compositionEN} onChange={e => updateField('compositionEN', e.target.value)} /></Field>
                 <Field label="Flavor">     <input className="input" value={form.flavorEN}      onChange={e => updateField('flavorEN',      e.target.value)} /></Field>
@@ -502,48 +637,67 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
                 <Field label="Structure">  <input className="input" value={form.structureEN}   onChange={e => updateField('structureEN',   e.target.value)} /></Field>
                 <Field label="Purpose">    <input className="input" value={form.purposeEN}     onChange={e => updateField('purposeEN',     e.target.value)} /></Field>
               </div>
+
+              <div style={{ borderTop: '1px solid var(--border)', margin: '20px 0 16px' }} />
+
+              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                🇪🇸 Español
+              </div>
+              <div className="field-row">
+                <Field label="Composition"><input className="input" value={form.compositionES} onChange={e => updateField('compositionES', e.target.value)} /></Field>
+                <Field label="Flavor">     <input className="input" value={form.flavorES}      onChange={e => updateField('flavorES',      e.target.value)} /></Field>
+              </div>
+              <div className="field-row">
+                <Field label="Structure">  <input className="input" value={form.structureES}   onChange={e => updateField('structureES',   e.target.value)} /></Field>
+                <Field label="Purpose">    <input className="input" value={form.purposeES}     onChange={e => updateField('purposeES',     e.target.value)} /></Field>
+              </div>
             </Card>
+
           </div>
 
-          {/* ── RIGHT COLUMN ── */}
+          {/* ── RIGHT: Image · Pricing ── */}
           <div>
-            {/* Image */}
+
             <Card icon="🖼️" title="Tier Image">
               <div className="img-preview">
                 {form.image
                   ? <img src={toImageUrl(form.image)} alt="Preview"
-                      onError={e => { e.currentTarget.style.display='none'; }} />
+                      onError={e => { e.currentTarget.style.display = 'none'; }} />
                   : <div className="img-preview__empty">
-                      <div className="img-preview__empty-icon">🦆</div><span>No image set</span>
+                      <div className="img-preview__empty-icon">🦆</div>
+                      <span>No image set</span>
                     </div>
                 }
               </div>
               <div className="img-upload-row">
-                <label className="btn btn--ghost btn--sm" style={{cursor:'pointer',display:'inline-flex',alignItems:'center',gap:6}}>
+                <label className="btn btn--ghost btn--sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   📁 Upload image
-                  <input type="file" accept="image/*" style={{display:'none'}} onChange={onImageUpload} />
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={onImageUpload} />
                 </label>
-                <button type="button" className="btn btn--ghost btn--sm" onClick={() => updateField('image','')}>Clear</button>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => updateField('image', '')}>Clear</button>
               </div>
               <Field label="Google Drive URL or File ID">
                 <input className="input input--mono" type="text" value={form.image}
                   onChange={e => updateField('image', e.target.value)}
                   placeholder="Paste a Drive share link or bare file ID…" />
-                <div className="field-hint">Any Drive URL is auto-converted to the correct embed format.</div>
+                <div className="field-hint">
+                  Upload auto-resizes to max 1 200 px &amp; compresses to JPEG (max input: 10 MB). Any Drive URL is converted to the correct embed format.
+                </div>
               </Field>
             </Card>
 
-            {/* Pricing */}
             <Card icon="💶" title="Pricing & Links">
-              <div className="field-hint" style={{marginBottom:12}}>
-                200g = Summit only &nbsp;·&nbsp; 250g / 500g / 1kg = Base, Explorer, Alpine
+              <div className="field-hint" style={{ marginBottom: 12 }}>
+                {sizes.length === 1
+                  ? 'Summit tier — 200 g only'
+                  : 'Base · Explorer · Alpine — 250 g, 500 g, 1 kg'}
               </div>
-              {ALL_SIZES.map(({ key, label, hint }) => (
-                <div key={key} style={{marginBottom:20}}>
-                  <div style={{fontSize:'0.72rem',fontWeight:600,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:6}}>
-                    {label} <span style={{fontWeight:400,textTransform:'none'}}>— {hint}</span>
+              {sizes.map(({ key, label }) => (
+                <div key={key} style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                    {label}
                   </div>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 2fr',gap:8}}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 8 }}>
                     <Field label="Cost (€)">
                       <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
                         value={form[`cost${key}`]} onChange={e => updateField(`cost${key}`, e.target.value)} />
@@ -561,37 +715,6 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
               ))}
             </Card>
 
-            {/* Content ES */}
-            <Card icon="🇪🇸" title="Content — Español">
-              <Field label="Eyebrow">
-                <input className="input" value={form.eyebrowES} onChange={e => updateField('eyebrowES', e.target.value)} />
-              </Field>
-              <Field label="Short Description">
-                <input className="input" value={form.shortDescES} onChange={e => updateField('shortDescES', e.target.value)} />
-              </Field>
-              <MarkdownField label="Long Description"
-                value={form.longDescES} onChange={v => updateField('longDescES', v)}
-                placeholder="Descripción larga en español…" />
-              <div className="field-row" style={{gridTemplateColumns:'1fr 1fr'}}>
-                {['feat01ES','feat02ES','feat03ES','feat04ES'].map((key,i) => (
-                  <Field key={key} label={`Feature ${i+1}`}>
-                    <input className="input" value={form[key]} onChange={e => updateField(key, e.target.value)} />
-                  </Field>
-                ))}
-              </div>
-            </Card>
-
-            {/* Coffee Profile ES */}
-            <Card icon="☕" title="Coffee Profile — Español">
-              <div className="field-row">
-                <Field label="Composition"><input className="input" value={form.compositionES} onChange={e => updateField('compositionES', e.target.value)} /></Field>
-                <Field label="Flavor">     <input className="input" value={form.flavorES}      onChange={e => updateField('flavorES',      e.target.value)} /></Field>
-              </div>
-              <div className="field-row">
-                <Field label="Structure">  <input className="input" value={form.structureES}   onChange={e => updateField('structureES',   e.target.value)} /></Field>
-                <Field label="Purpose">    <input className="input" value={form.purposeES}     onChange={e => updateField('purposeES',     e.target.value)} /></Field>
-              </div>
-            </Card>
           </div>
         </div>
 
@@ -599,9 +722,9 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
           {currentId
             ? <button type="button" className="btn btn--danger btn--sm" onClick={() => setPendingDeleteId(currentId)}>🗑️ Delete</button>
             : <div />}
-          <div style={{flex:1}} />
+          <div style={{ flex: 1 }} />
           <button type="button" className="btn btn--ghost btn--sm" onClick={closeForm}>Cancel</button>
-          <button type="submit" className="btn btn--primary">Save Tier</button>
+          <button type="submit" className="btn btn--primary">Save Level</button>
         </div>
       </form>
     </div>
@@ -630,17 +753,17 @@ function MarkdownField({ label, value, onChange, placeholder, minHeight = 120 })
   return (
     <div className="field">
       <div className="md-header">
-        <label style={{margin:0}}>{label}</label>
+        <label style={{ margin: 0 }}>{label}</label>
         <div className="md-tabs">
-          <button type="button" className={`md-tab${!preview?' md-tab--active':''}`} onClick={() => setPreview(false)}>Edit</button>
-          <button type="button" className={`md-tab${preview?' md-tab--active':''}`}  onClick={() => setPreview(true)}>Preview</button>
+          <button type="button" className={`md-tab${!preview ? ' md-tab--active' : ''}`} onClick={() => setPreview(false)}>Edit</button>
+          <button type="button" className={`md-tab${preview  ? ' md-tab--active' : ''}`} onClick={() => setPreview(true)}>Preview</button>
         </div>
       </div>
       {preview
-        ? <div className="md-preview" style={{minHeight}}
-            dangerouslySetInnerHTML={{__html: renderMarkdown(value) || '<p class="md-empty">Nothing to preview</p>'}} />
-        : <textarea className="textarea-input" style={{minHeight}}
-            value={value||''} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+        ? <div className="md-preview" style={{ minHeight }}
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(value) || '<p class="md-empty">Nothing to preview</p>' }} />
+        : <textarea className="textarea-input" style={{ minHeight }}
+            value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
       }
       <div className="field-hint">**bold** · *italic* · # heading · - list</div>
     </div>
