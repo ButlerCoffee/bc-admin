@@ -2,8 +2,8 @@
  * SubscriptionPanel — content-only component for Subscription Levels.
  * Rendered inside App.jsx's sidebar + main layout when panel === 'subs'.
  *
- * Images are uploaded to Google Drive via the GAS backend
- * (stored in the "Butler Subscription Images" folder).
+ * Images: upload manually to the shared Drive folder, then paste the URL/ID here.
+ * Drive folder: https://drive.google.com/drive/folders/1Ek32YHfrAmUryNTp4oz7Sz02tE4Jerz5
  */
 import { useEffect, useMemo, useState } from 'react';
 import { apiCall } from './lib/api.js';
@@ -25,44 +25,25 @@ function toImageUrl(url) {
   return url;
 }
 
-// ── Canvas resize + compress ──────────────────────────────────────────────────
-// Reduces large images before base64-encoding them for the GAS/Drive upload.
-const MAX_INPUT_BYTES = 10 * 1024 * 1024; // 10 MB hard cap
-const MAX_WARN_BYTES  =  5 * 1024 * 1024; // warn at 5 MB
-const MAX_WIDTH_PX    = 1200;
-const JPEG_QUALITY    = 0.85;
+// ── Pricing helpers ───────────────────────────────────────────────────────────
 
-/** Resize + compress a File to a base64 JPEG string. Returns { base64, warnMsg }. */
-async function resizeToBase64(file) {
-  if (file.size > MAX_INPUT_BYTES) {
-    throw new Error(`Image is ${(file.size / 1024 / 1024).toFixed(1)} MB — max input size is 10 MB. Please resize the file first.`);
-  }
-  const warnMsg = file.size > MAX_WARN_BYTES
-    ? `Large file (${(file.size / 1024 / 1024).toFixed(1)} MB) — compressing…`
-    : null;
+/** Round to max 2 decimal places; returns '' for empty/invalid. */
+function fmtMoney(v) {
+  if (v === '' || v === null || v === undefined) return '';
+  const n = parseFloat(v);
+  return isNaN(n) ? '' : String(Math.round(n * 100) / 100);
+}
 
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objUrl);
-      const scale = Math.min(1, MAX_WIDTH_PX / img.width);
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      canvas.toBlob(blob => {
-        if (!blob) { reject(new Error('Canvas compression failed')); return; }
-        const reader = new FileReader();
-        reader.onload = ev => resolve({ base64: ev.target.result.split(',')[1], warnMsg });
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      }, 'image/jpeg', JPEG_QUALITY);
-    };
-    img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error('Could not load image')); };
-    img.src = objUrl;
-  });
+/** Returns { marginAmt, marginPct } or null if cost/price are missing. */
+function calcMargin(cost, price) {
+  const c = parseFloat(cost);
+  const p = parseFloat(price);
+  if (isNaN(c) || isNaN(p) || p <= 0) return null;
+  return { marginAmt: p - c, marginPct: (p - c) / p * 100 };
+}
+
+function marginClass(pct) {
+  return pct >= 50 ? 'margin--good' : pct >= 40 ? 'margin--ok' : 'margin--low';
 }
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
@@ -208,33 +189,6 @@ export default function SubscriptionPanel() {
     finally { setLoading(false); }
   }
 
-  // ── Image upload — resize via canvas, then send to GAS → Google Drive ────────
-  async function handleImageUpload(e) {
-    const file = e.target.files?.[0]; if (!file) return;
-    e.target.value = '';
-    // Immediate local blob preview
-    const blobUrl = URL.createObjectURL(file);
-    setForm(f => ({ ...f, image: blobUrl }));
-    setLoading(true);
-    try {
-      const { base64, warnMsg } = await resizeToBase64(file);
-      if (warnMsg) toast(warnMsg);
-      const safeName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
-      const result = await apiCall('POST', {
-        action: 'uploadImage',
-        filename: safeName,
-        mimeType: 'image/jpeg',
-        data: base64,
-      }, 'subs');
-      setForm(f => ({ ...f, image: result.url }));
-      URL.revokeObjectURL(blobUrl);
-      toast('Image uploaded to Google Drive!');
-    } catch (err) {
-      toast(`Upload failed — ${err.message}`, 'error');
-      setForm(f => ({ ...f, image: '' }));
-      URL.revokeObjectURL(blobUrl);
-    } finally { setLoading(false); }
-  }
 
   return <>
     {subPanel === 'list' && (
@@ -259,7 +213,6 @@ export default function SubscriptionPanel() {
         saveSub={saveSub} closeForm={closeForm}
         currentId={currentId}
         setPendingDeleteId={setPendingDeleteId}
-        onImageUpload={handleImageUpload}
       />
     )}
 
@@ -506,19 +459,23 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
             <div className="card__header"><span className="card__icon">💶</span><span className="card__title">Pricing & Links</span></div>
             <div className="card__body">
               <div className="pricing-table">
-                <div className="pricing-table-header" style={{ gridTemplateColumns: '70px 1fr 1fr 1fr' }}>
-                  <span>Size</span><span>Cost €</span><span>Price €</span><span>Link</span>
+                <div className="pricing-table-header" style={{ gridTemplateColumns: '70px 1fr 1fr 1fr 1fr 1fr' }}>
+                  <span>Size</span><span>Cost €</span><span>Price €</span><span>Margin €</span><span>Margin %</span><span>Link</span>
                 </div>
                 {sizes.map(({ key, label }) => {
                   const cost  = sub[`cost${key}`];
                   const price = sub[`price${key}`];
                   const link  = sub[`link${key}`];
                   if (!cost && !price && !link) return null;
+                  const mg  = calcMargin(cost, price);
+                  const cls = mg ? marginClass(mg.marginPct) : 'margin--none';
                   return (
-                    <div className="pricing-row" key={key} style={{ gridTemplateColumns: '70px 1fr 1fr 1fr' }}>
+                    <div className="pricing-row" key={key} style={{ gridTemplateColumns: '70px 1fr 1fr 1fr 1fr 1fr' }}>
                       <span className="pricing-size">{label}</span>
-                      <span className="pricing-ro">{cost  ? `€${cost}`  : '—'}</span>
-                      <span className="pricing-ro">{price ? `€${price}` : '—'}</span>
+                      <span className="pricing-ro">{cost  ? `€${parseFloat(cost).toFixed(2)}`  : '—'}</span>
+                      <span className="pricing-ro">{price ? `€${parseFloat(price).toFixed(2)}` : '—'}</span>
+                      <span className={`pricing-profit ${cls}`}>{mg ? `€${mg.marginAmt.toFixed(2)}` : '—'}</span>
+                      <span className={`pricing-margin ${cls}`}>{mg ? `${mg.marginPct.toFixed(1)}%` : '—'}</span>
                       <span style={{ fontSize: '0.75rem' }}>
                         {link
                           ? <a href={link} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>🔗 Open</a>
@@ -541,7 +498,7 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
 }
 
 // ── Form Panel ────────────────────────────────────────────────────────────────
-function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPendingDeleteId, onImageUpload }) {
+function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPendingDeleteId }) {
   const sizes = sizesFor(form.title);
 
   return (
@@ -670,10 +627,14 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
                 }
               </div>
               <div className="img-upload-row">
-                <label className="btn btn--ghost btn--sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  📁 Upload image
-                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={onImageUpload} />
-                </label>
+                <a
+                  href="https://drive.google.com/drive/folders/1Ek32YHfrAmUryNTp4oz7Sz02tE4Jerz5"
+                  target="_blank" rel="noreferrer"
+                  className="btn btn--ghost btn--sm"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  📂 Open image folder
+                </a>
                 <button type="button" className="btn btn--ghost btn--sm" onClick={() => updateField('image', '')}>Clear</button>
               </div>
               <Field label="Google Drive URL or File ID">
@@ -681,7 +642,7 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
                   onChange={e => updateField('image', e.target.value)}
                   placeholder="Paste a Drive share link or bare file ID…" />
                 <div className="field-hint">
-                  Upload auto-resizes to max 1 200 px &amp; compresses to JPEG (max input: 10 MB). Any Drive URL is converted to the correct embed format.
+                  Drop the image into the Drive folder above, then paste the share link or bare file ID here. Any Drive URL is auto-converted to the embed format.
                 </div>
               </Field>
             </Card>
@@ -692,27 +653,43 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
                   ? 'Summit tier — 200 g only'
                   : 'Base · Explorer · Alpine — 250 g, 500 g, 1 kg'}
               </div>
-              {sizes.map(({ key, label }) => (
-                <div key={key} style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                    {label}
+              {sizes.map(({ key, label }) => {
+                const mg  = calcMargin(form[`cost${key}`], form[`price${key}`]);
+                const cls = mg ? marginClass(mg.marginPct) : 'margin--none';
+                return (
+                  <div key={key} style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                      {label}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 8 }}>
+                      <Field label="Cost (€)">
+                        <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
+                          value={form[`cost${key}`]}
+                          onChange={e => updateField(`cost${key}`, e.target.value)}
+                          onBlur={e  => updateField(`cost${key}`,  fmtMoney(e.target.value))} />
+                      </Field>
+                      <Field label="Price (€)">
+                        <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
+                          value={form[`price${key}`]}
+                          onChange={e => updateField(`price${key}`, e.target.value)}
+                          onBlur={e  => updateField(`price${key}`,  fmtMoney(e.target.value))} />
+                      </Field>
+                      <Field label="Buy Link">
+                        <input className="input" type="url" placeholder="https://…"
+                          value={form[`link${key}`]} onChange={e => updateField(`link${key}`, e.target.value)} />
+                      </Field>
+                    </div>
+                    {mg && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 4, paddingLeft: 2 }}>
+                        Margin:&nbsp;
+                        <span className={`pricing-profit ${cls}`}>€{mg.marginAmt.toFixed(2)}</span>
+                        <span style={{ margin: '0 5px', opacity: 0.4 }}>·</span>
+                        <span className={`pricing-margin ${cls}`}>{mg.marginPct.toFixed(1)}%</span>
+                      </div>
+                    )}
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 8 }}>
-                    <Field label="Cost (€)">
-                      <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
-                        value={form[`cost${key}`]} onChange={e => updateField(`cost${key}`, e.target.value)} />
-                    </Field>
-                    <Field label="Price (€)">
-                      <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
-                        value={form[`price${key}`]} onChange={e => updateField(`price${key}`, e.target.value)} />
-                    </Field>
-                    <Field label="Buy Link">
-                      <input className="input" type="url" placeholder="https://…"
-                        value={form[`link${key}`]} onChange={e => updateField(`link${key}`, e.target.value)} />
-                    </Field>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </Card>
 
           </div>
