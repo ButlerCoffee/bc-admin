@@ -7,12 +7,95 @@ import LoginPage   from './LoginPage.jsx';
 import LandingPage from './LandingPage.jsx';
 import App         from './App.jsx';
 
+// ── Mobile bottom nav + menu sheet ────────────────────────────────────────────
+function MobileNav({ currentApp, setCurrentApp }) {
+  const { user, logout } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  function closeMenu() { setMenuOpen(false); }
+
+  function goTo(app) {
+    setCurrentApp(app);
+    closeMenu();
+  }
+
+  return (
+    <>
+      {/* Bottom tab bar */}
+      <nav className="mobile-nav">
+        <button
+          className={`mobile-nav__item${!currentApp ? ' mobile-nav__item--active' : ''}`}
+          onClick={() => goTo(null)}
+        >
+          <span className="mobile-nav__icon">🏠</span>
+          <span className="mobile-nav__label">Home</span>
+        </button>
+
+        <button
+          className={`mobile-nav__item${currentApp === 'coffee' ? ' mobile-nav__item--active' : ''}`}
+          onClick={() => goTo('coffee')}
+        >
+          <span className="mobile-nav__icon">☕</span>
+          <span className="mobile-nav__label">Coffee</span>
+        </button>
+
+        {/* Reserved slot */}
+        <div className="mobile-nav__item mobile-nav__item--empty" />
+
+        <button
+          className={`mobile-nav__item${menuOpen ? ' mobile-nav__item--active' : ''}`}
+          onClick={() => setMenuOpen(p => !p)}
+        >
+          <span className="mobile-nav__icon">☰</span>
+          <span className="mobile-nav__label">Menu</span>
+        </button>
+      </nav>
+
+      {/* Menu bottom sheet */}
+      {menuOpen && (
+        <div className="mobile-menu-overlay" onClick={closeMenu}>
+          <div className="mobile-menu" onClick={e => e.stopPropagation()}>
+            <div className="mobile-menu__handle" />
+
+            <div className="mobile-menu__account">
+              <div className="mobile-menu__avatar">
+                {user?.email?.[0]?.toUpperCase() || '?'}
+              </div>
+              <div>
+                <div className="mobile-menu__email">{user?.email}</div>
+                <div className="mobile-menu__org">Butler Society, S.L.</div>
+              </div>
+            </div>
+
+            <div className="mobile-menu__divider" />
+
+            <button className="mobile-menu__item" onClick={() => { goTo(null); }}>
+              <span className="mobile-menu__item-icon">🏠</span>
+              <span>Butler Society Hub</span>
+            </button>
+            <button className="mobile-menu__item" onClick={() => { goTo('coffee'); }}>
+              <span className="mobile-menu__item-icon">☕</span>
+              <span>Butler Coffee</span>
+            </button>
+
+            <div className="mobile-menu__divider" />
+
+            <button className="mobile-menu__item mobile-menu__item--danger" onClick={logout}>
+              <span className="mobile-menu__item-icon">🚪</span>
+              <span>Sign out</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Top-level router ──────────────────────────────────────────────────────────
 function Root() {
   const { user } = useAuth();
   const [currentApp, setCurrentApp] = useState(null);
 
-  // Still checking Firebase auth state — show spinner
   if (user === undefined) {
     return (
       <div className="loading-overlay" style={{ display: 'flex' }}>
@@ -21,19 +104,17 @@ function Root() {
     );
   }
 
-  // Not logged in
   if (!user) return <LoginPage />;
 
-  // Logged in but no app chosen → show hub
-  if (!currentApp) return <LandingPage onEnterApp={setCurrentApp} />;
-
-  // Butler Coffee Admin
-  if (currentApp === 'coffee') {
-    return <App onBackToHub={() => setCurrentApp(null)} />;
-  }
-
-  // Fallback — shouldn't happen
-  return <LandingPage onEnterApp={setCurrentApp} />;
+  return (
+    <>
+      {currentApp === 'coffee'
+        ? <App onBackToHub={() => setCurrentApp(null)} />
+        : <LandingPage onEnterApp={setCurrentApp} />
+      }
+      <MobileNav currentApp={currentApp} setCurrentApp={setCurrentApp} />
+    </>
+  );
 }
 
 createRoot(document.getElementById('root')).render(

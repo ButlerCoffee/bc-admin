@@ -288,6 +288,7 @@ export default function LabelsPanel({ coffees }) {
   const [queue,      setQueue]      = useState([]);
   const [pdfStatus,  setPdfStatus]  = useState('idle');
   const [pdfUrl,     setPdfUrl]     = useState(null);
+  const [pdfBlob,    setPdfBlob]    = useState(null);
 
   const selectedCoffee = coffees.find(c => c.id === selectedId) || null;
 
@@ -326,14 +327,15 @@ export default function LabelsPanel({ coffees }) {
   }
 
   function removeItem(idx) { setQueue(p => p.filter((_, i) => i !== idx)); setPdfUrl(null); }
-  function clearQueue()    { setQueue([]); setPdfUrl(null); }
+  function clearQueue()    { setQueue([]); setPdfUrl(null); setPdfBlob(null); }
 
   async function generate() {
     if (!queue.length) return;
-    setPdfStatus('loading'); setPdfUrl(null);
+    setPdfStatus('loading'); setPdfUrl(null); setPdfBlob(null);
     try {
       const doc  = await buildPDF(queue);
       const blob = doc.output('blob');
+      setPdfBlob(blob);
       setPdfUrl(URL.createObjectURL(blob));
       setPdfStatus('done');
     } catch (err) {
@@ -341,6 +343,24 @@ export default function LabelsPanel({ coffees }) {
       setPdfStatus('error');
     }
   }
+
+  async function sharePDF() {
+    if (!pdfBlob) return;
+    const filename = `butler-labels-${new Date().toISOString().slice(0, 10)}.pdf`;
+    const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Butler Coffee Labels' });
+      } else if (navigator.share) {
+        // Fallback: share without file (just title + text)
+        await navigator.share({ title: 'Butler Coffee Labels', text: 'Your coffee labels are ready.' });
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') console.error(err);
+    }
+  }
+
+  const canShare = typeof navigator !== 'undefined' && !!navigator.share;
 
   const sortedCoffees = [...coffees].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
@@ -512,12 +532,19 @@ export default function LabelsPanel({ coffees }) {
                       : `📄 Generate PDF (${queue.length} label${queue.length !== 1 ? 's' : ''})`}
                   </button>
                   {pdfStatus === 'done' && pdfUrl && (
-                    <a href={pdfUrl}
-                      download={`butler-labels-${new Date().toISOString().slice(0, 10)}.pdf`}
-                      className="btn btn--ghost"
-                      style={{ width: '100%', textAlign: 'center', textDecoration: 'none' }}>
-                      ⬇️ Download PDF
-                    </a>
+                    <div className="pdf-actions">
+                      <a href={pdfUrl}
+                        download={`butler-labels-${new Date().toISOString().slice(0, 10)}.pdf`}
+                        className="btn btn--ghost pdf-actions__btn"
+                        style={{ textDecoration: 'none', textAlign: 'center' }}>
+                        ⬇️ Download
+                      </a>
+                      {canShare && (
+                        <button className="btn btn--ghost pdf-actions__btn" onClick={sharePDF}>
+                          ↗️ Share
+                        </button>
+                      )}
+                    </div>
                   )}
                   {pdfStatus === 'error' && (
                     <div style={{ color: 'var(--red)', fontSize: '0.85rem' }}>
