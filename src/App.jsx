@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiCall } from './lib/api.js';
 import LabelsPanel from './LabelsPanel.jsx';
+import { useAuth } from './AuthContext.jsx';
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
 // Google's uc?export=view URL does NOT work reliably as a direct <img> src.
@@ -106,7 +107,7 @@ function renderMarkdown(md) {
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
-export default function App() {
+export default function App({ onBackToHub }) {
   const [coffees, setCoffees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -265,6 +266,7 @@ export default function App() {
     reader.readAsDataURL(file);
   }
 
+  const { logout } = useAuth();
   const isCoffeePanel = ['list','view','form'].includes(panel);
   const sc = sidebarCollapsed;
 
@@ -326,7 +328,16 @@ export default function App() {
         </div>
       </nav>
 
-      {!sc && <div className="sidebar__footer"><a href="/" target="_blank">← View public site</a></div>}
+      <div className="sidebar__footer">
+        <button className="nav-link" onClick={onBackToHub} title="Butler Society Hub">
+          <span className="nav-link__icon">🏠</span>
+          {!sc && <span>Butler Society</span>}
+        </button>
+        <button className="nav-link" onClick={logout} title="Sign out">
+          <span className="nav-link__icon">🚪</span>
+          {!sc && <span>Sign out</span>}
+        </button>
+      </div>
 
       <button
         className="sidebar__toggle"
