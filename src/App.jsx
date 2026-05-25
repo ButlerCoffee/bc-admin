@@ -111,6 +111,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [panel, setPanel] = useState('list');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   const [form, setForm] = useState(emptyCoffee);
   const [slugManual, setSlugManual] = useState(false);
@@ -264,39 +265,85 @@ export default function App() {
     reader.readAsDataURL(file);
   }
 
+  const isCoffeePanel = ['list','view','form'].includes(panel);
+  const sc = sidebarCollapsed;
+
   return <>
-    <aside className="sidebar">
+    <aside className={`sidebar${sc ? ' sidebar--collapsed' : ''}`}>
       <div className="sidebar__brand">
-        <img src={DEFAULT_IMAGE} alt="Butler Coffee" onError={e => e.currentTarget.style.display='none'} />
-        <div className="sidebar__brand-text">
+        <img src="/butler-logo.png" alt="Butler Coffee"
+          onError={e => { e.currentTarget.src=''; e.currentTarget.style.display='none'; }} />
+        {!sc && <div className="sidebar__brand-text">
           <div className="sidebar__brand-name">Butler Coffee</div>
           <div className="sidebar__brand-sub">Admin DB</div>
-        </div>
+        </div>}
       </div>
+
       <nav className="sidebar__nav">
         <div className="nav-section">
-          <div className="nav-section__label">Catalog</div>
-          <button className="nav-link active"><span className="nav-link__icon">☕</span> Coffee <span className="nav-link__badge">{coffees.length}</span></button>
-          <button className="nav-link nav-link--soon" title="Coming soon"><span className="nav-link__icon">⚙️</span> Machines <span className="nav-link__badge">soon</span></button>
-          <button className="nav-link nav-link--soon" title="Coming soon"><span className="nav-link__icon">✍️</span> Blog <span className="nav-link__badge">soon</span></button>
+          {!sc && <div className="nav-section__label">Catalog</div>}
+          <button
+            className={`nav-link${isCoffeePanel ? ' active' : ''}`}
+            onClick={() => setPanel('list')}
+            title="Coffee"
+          >
+            <span className="nav-link__icon">☕</span>
+            {!sc && <><span>Coffee</span><span className="nav-link__badge">{coffees.length}</span></>}
+          </button>
+          <button className="nav-link nav-link--soon" title="Coming soon">
+            <span className="nav-link__icon">⚙️</span>
+            {!sc && <><span>Machines</span><span className="nav-link__badge">soon</span></>}
+          </button>
+          <button className="nav-link nav-link--soon" title="Coming soon">
+            <span className="nav-link__icon">✍️</span>
+            {!sc && <><span>Blog</span><span className="nav-link__badge">soon</span></>}
+          </button>
         </div>
+
         <div className="nav-section">
-          <div className="nav-section__label">Tools</div>
-          <button className={`nav-link${panel === 'labels' ? ' active' : ''}`} onClick={() => setPanel('labels')}><span className="nav-link__icon">🏷️</span> Label Generator</button>
-          <button className="nav-link" onClick={() => loadFromSheet(true)}><span className="nav-link__icon">🔄</span> Sync from Sheet</button>
-          <button className="nav-link" onClick={exportCSV}><span className="nav-link__icon">⬇️</span> Export CSV</button>
-          <button className="nav-link" onClick={() => document.getElementById('import-file').click()}><span className="nav-link__icon">⬆️</span> Import CSV</button>
+          {!sc && <div className="nav-section__label">Tools</div>}
+          <button
+            className={`nav-link${panel === 'labels' ? ' active' : ''}`}
+            onClick={() => setPanel('labels')}
+            title="Label Generator"
+          >
+            <span className="nav-link__icon">🏷️</span>
+            {!sc && <span>Label Generator</span>}
+          </button>
+          <button className="nav-link" onClick={() => loadFromSheet(true)} title="Sync from Sheet">
+            <span className="nav-link__icon">🔄</span>
+            {!sc && <span>Sync from Sheet</span>}
+          </button>
+          <button className="nav-link" onClick={exportCSV} title="Export CSV">
+            <span className="nav-link__icon">⬇️</span>
+            {!sc && <span>Export CSV</span>}
+          </button>
+          <button className="nav-link" onClick={() => document.getElementById('import-file').click()} title="Import CSV">
+            <span className="nav-link__icon">⬆️</span>
+            {!sc && <span>Import CSV</span>}
+          </button>
           <input type="file" id="import-file" accept=".csv" style={{ display:'none' }} onChange={importCSV} />
         </div>
       </nav>
-      <div className="sidebar__footer"><a href="/" target="_blank">← View public site</a></div>
+
+      {!sc && <div className="sidebar__footer"><a href="/" target="_blank">← View public site</a></div>}
+
+      <button
+        className="sidebar__toggle"
+        onClick={() => setSidebarCollapsed(p => !p)}
+        title={sc ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {sc ? '›' : '‹'}
+      </button>
     </aside>
 
-    <div className="main">
+    <div className={`main${sc ? ' main--collapsed' : ''}`}>
       <div className="topbar">
         <div className="topbar__left">
-          <span className="topbar__title">{panel === 'labels' ? 'Label Generator' : 'Coffee'}</span>
-          {panel !== 'labels' && <span className="topbar__count">{coffees.length} entr{coffees.length === 1 ? 'y' : 'ies'}</span>}
+          <span className="topbar__title">
+            {panel === 'labels' ? 'Label Generator' : 'Coffee'}
+          </span>
+          {isCoffeePanel && <span className="topbar__count">{coffees.length} entr{coffees.length === 1 ? 'y' : 'ies'}</span>}
         </div>
         <div className="topbar__right">
           {panel === 'list' && <button className="btn btn--primary" onClick={() => openForm(null)}>+ Add Coffee</button>}
@@ -304,7 +351,7 @@ export default function App() {
       </div>
       <div className="content">
         {panel === 'labels'
-          ? <LabelsPanel coffees={coffees} onBack={() => setPanel('list')} />
+          ? <LabelsPanel coffees={coffees} />
           : panel === 'list'
           ? <ListPanel {...{ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, originFilter, setOriginFilter, visibilityFilter, setVisibilityFilter, filtered, openForm, openView, setPendingDeleteId }} />
           : panel === 'view'

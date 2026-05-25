@@ -274,7 +274,7 @@ function LabelPreview({ item }) {
 }
 
 // ── Main panel ────────────────────────────────────────────────────────────────
-export default function LabelsPanel({ coffees, onBack }) {
+export default function LabelsPanel({ coffees }) {
   // Form state
   const [selectedId, setSelectedId] = useState('');
   const [bagSize,    setBagSize]    = useState('');
@@ -346,11 +346,6 @@ export default function LabelsPanel({ coffees, onBack }) {
 
   return (
     <div className="labels-panel">
-      <div className="form-header">
-        <button className="form-header__back" onClick={onBack}>← Back</button>
-        <h1 className="form-header__title">Label Generator</h1>
-      </div>
-
       <div className="labels-layout">
 
         {/* ── LEFT: form ───────────────────────────────────────────────────── */}
