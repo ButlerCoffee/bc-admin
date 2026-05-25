@@ -14,14 +14,16 @@ const DEFAULT_IMAGE = `https://drive.google.com/thumbnail?id=${DRIVE_IMG_FALLBAC
 
 function toImageUrl(url) {
   if (!url) return DEFAULT_IMAGE;
-  // Blob previews and any direct HTTPS URL — use as-is
-  if (url.startsWith('blob:') || /^https?:\/\//.test(url)) return url;
-  // Drive URL patterns → convert to thumbnail embed
+  // Blob previews — use as-is
+  if (url.startsWith('blob:')) return url;
+  // Drive URLs (any format: /d/ID/view, ?id=ID, &id=ID) → thumbnail embed
+  // This check MUST come before the generic https:// passthrough
   const m = url.match(/(?:\/d\/|[?&]id=)([a-zA-Z0-9_-]{20,})/);
   if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400`;
-  // Bare file ID
+  // Bare Drive file ID (no slashes or query chars, 20+ alphanum chars)
   if (/^[a-zA-Z0-9_-]{20,}$/.test(url.trim()))
     return `https://drive.google.com/thumbnail?id=${url.trim()}&sz=w400`;
+  // Any other direct image URL — use as-is
   return url;
 }
 
@@ -459,8 +461,8 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
             <div className="card__header"><span className="card__icon">💶</span><span className="card__title">Pricing & Links</span></div>
             <div className="card__body">
               <div className="pricing-table">
-                <div className="pricing-table-header" style={{ gridTemplateColumns: '70px 1fr 1fr 1fr 1fr 1fr' }}>
-                  <span>Size</span><span>Cost €</span><span>Price €</span><span>Margin €</span><span>Margin %</span><span>Link</span>
+                <div className="pricing-table-header" style={{ gridTemplateColumns: '70px 1fr 1fr 1fr 1fr' }}>
+                  <span>Size</span><span>Cost</span><span>Price</span><span>Profit</span><span>Margin</span>
                 </div>
                 {sizes.map(({ key, label }) => {
                   const cost  = sub[`cost${key}`];
@@ -470,17 +472,15 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
                   const mg  = calcMargin(cost, price);
                   const cls = mg ? marginClass(mg.marginPct) : 'margin--none';
                   return (
-                    <div className="pricing-row" key={key} style={{ gridTemplateColumns: '70px 1fr 1fr 1fr 1fr 1fr' }}>
-                      <span className="pricing-size">{label}</span>
-                      <span className="pricing-ro">{cost  ? `€${parseFloat(cost).toFixed(2)}`  : '—'}</span>
-                      <span className="pricing-ro">{price ? `€${parseFloat(price).toFixed(2)}` : '—'}</span>
-                      <span className={`pricing-profit ${cls}`}>{mg ? `€${mg.marginAmt.toFixed(2)}` : '—'}</span>
-                      <span className={`pricing-margin ${cls}`}>{mg ? `${mg.marginPct.toFixed(1)}%` : '—'}</span>
-                      <span style={{ fontSize: '0.75rem' }}>
-                        {link
-                          ? <a href={link} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>🔗 Open</a>
-                          : '—'}
-                      </span>
+                    <div key={key}>
+                      <div className="pricing-row" style={{ gridTemplateColumns: '70px 1fr 1fr 1fr 1fr' }}>
+                        <span className="pricing-size">{label}</span>
+                        <span className="pricing-ro">{cost  ? `€${parseFloat(cost).toFixed(2)}`  : '—'}</span>
+                        <span className="pricing-ro">{price ? `€${parseFloat(price).toFixed(2)}` : '—'}</span>
+                        <span className={`pricing-profit ${cls}`}>{mg ? `€${mg.marginAmt.toFixed(2)}` : '—'}</span>
+                        <span className={`pricing-margin ${cls}`}>{mg ? `${mg.marginPct.toFixed(1)}%` : '—'}</span>
+                      </div>
+                      {link && <LinkBar link={link} />}
                     </div>
                   );
                 })}
@@ -642,7 +642,7 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
                   onChange={e => updateField('image', e.target.value)}
                   placeholder="Paste a Drive share link or bare file ID…" />
                 <div className="field-hint">
-                  Drop the image into the Drive folder above, then paste the share link or bare file ID here. Any Drive URL is auto-converted to the embed format.
+                  Drop the image into the Drive folder above, then paste the share link or bare file ID here. Make sure the file is shared as <strong>Anyone with the link → Viewer</strong>, otherwise the image won't display.
                 </div>
               </Field>
             </Card>
@@ -661,32 +661,31 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
                     <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
                       {label}
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 8 }}>
-                      <Field label="Cost (€)">
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <Field label="Cost">
                         <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
                           value={form[`cost${key}`]}
                           onChange={e => updateField(`cost${key}`, e.target.value)}
                           onBlur={e  => updateField(`cost${key}`,  fmtMoney(e.target.value))} />
                       </Field>
-                      <Field label="Price (€)">
+                      <Field label="Price">
                         <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
                           value={form[`price${key}`]}
                           onChange={e => updateField(`price${key}`, e.target.value)}
                           onBlur={e  => updateField(`price${key}`,  fmtMoney(e.target.value))} />
                       </Field>
-                      <Field label="Buy Link">
-                        <input className="input" type="url" placeholder="https://…"
-                          value={form[`link${key}`]} onChange={e => updateField(`link${key}`, e.target.value)} />
-                      </Field>
                     </div>
                     {mg && (
-                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 4, paddingLeft: 2 }}>
-                        Margin:&nbsp;
-                        <span className={`pricing-profit ${cls}`}>€{mg.marginAmt.toFixed(2)}</span>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)', margin: '4px 0 8px', paddingLeft: 2 }}>
+                        Profit:&nbsp;<span className={`pricing-profit ${cls}`}>€{mg.marginAmt.toFixed(2)}</span>
                         <span style={{ margin: '0 5px', opacity: 0.4 }}>·</span>
-                        <span className={`pricing-margin ${cls}`}>{mg.marginPct.toFixed(1)}%</span>
+                        Margin:&nbsp;<span className={`pricing-margin ${cls}`}>{mg.marginPct.toFixed(1)}%</span>
                       </div>
                     )}
+                    <Field label="Link">
+                      <input className="input" type="url" placeholder="https://…"
+                        value={form[`link${key}`]} onChange={e => updateField(`link${key}`, e.target.value)} />
+                    </Field>
                   </div>
                 );
               })}
@@ -704,6 +703,39 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
           <button type="submit" className="btn btn--primary">Save Level</button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ── Link bar — shown under each pricing row in the view ───────────────────────
+function LinkBar({ link }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard.writeText(link)
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })
+      .catch(() => {});
+  }
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6,
+      background: 'var(--surface-2)', borderRadius: 6,
+      padding: '5px 8px', marginBottom: 10, marginTop: 3,
+    }}>
+      <span style={{ color: 'var(--muted)', fontSize: '0.72rem', flexShrink: 0 }}>🔗</span>
+      <span style={{
+        flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        color: 'var(--muted)', fontFamily: 'monospace', fontSize: '0.72rem',
+      }}>{link}</span>
+      <a href={link} target="_blank" rel="noreferrer"
+        className="btn btn--ghost btn--sm"
+        style={{ fontSize: '0.72rem', padding: '2px 8px', flexShrink: 0, lineHeight: 1.6 }}>
+        View ↗
+      </a>
+      <button type="button" onClick={copy}
+        className="btn btn--ghost btn--sm"
+        style={{ fontSize: '0.72rem', padding: '2px 8px', flexShrink: 0, lineHeight: 1.6, minWidth: 54 }}>
+        {copied ? '✓ Copied' : 'Copy'}
+      </button>
     </div>
   );
 }
