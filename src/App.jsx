@@ -111,7 +111,7 @@ export default function App({ onBackToHub }) {
   const [coffees, setCoffees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState([]);
-  const [panel, setPanel] = useState('list');
+  const [panel, setPanel] = useState('home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   const [form, setForm] = useState(emptyCoffee);
@@ -289,15 +289,15 @@ export default function App({ onBackToHub }) {
             onClick={() => setPanel('list')}
             title="Coffee"
           >
-            <span className="nav-link__icon">☕</span>
+            <span className="nav-link__icon"><i className="fa-solid fa-mug-hot" /></span>
             {!sc && <><span>Coffee</span><span className="nav-link__badge">{coffees.length}</span></>}
           </button>
           <button className="nav-link nav-link--soon" title="Coming soon">
-            <span className="nav-link__icon">⚙️</span>
+            <span className="nav-link__icon"><i className="fa-solid fa-gears" /></span>
             {!sc && <><span>Machines</span><span className="nav-link__badge">soon</span></>}
           </button>
           <button className="nav-link nav-link--soon" title="Coming soon">
-            <span className="nav-link__icon">✍️</span>
+            <span className="nav-link__icon"><i className="fa-solid fa-pen-nib" /></span>
             {!sc && <><span>Blog</span><span className="nav-link__badge">soon</span></>}
           </button>
         </div>
@@ -309,19 +309,19 @@ export default function App({ onBackToHub }) {
             onClick={() => setPanel('labels')}
             title="Label Generator"
           >
-            <span className="nav-link__icon">🏷️</span>
+            <span className="nav-link__icon"><i className="fa-solid fa-tag" /></span>
             {!sc && <span>Label Generator</span>}
           </button>
-          <button className="nav-link" onClick={() => loadFromSheet(true)} title="Sync from Sheet">
-            <span className="nav-link__icon">🔄</span>
-            {!sc && <span>Sync from Sheet</span>}
+          <button className="nav-link" onClick={() => loadFromSheet(true)} title="Sync">
+            <span className="nav-link__icon"><i className="fa-solid fa-rotate" /></span>
+            {!sc && <span>Sync</span>}
           </button>
           <button className="nav-link" onClick={exportCSV} title="Export CSV">
-            <span className="nav-link__icon">⬇️</span>
+            <span className="nav-link__icon"><i className="fa-solid fa-download" /></span>
             {!sc && <span>Export CSV</span>}
           </button>
           <button className="nav-link" onClick={() => document.getElementById('import-file').click()} title="Import CSV">
-            <span className="nav-link__icon">⬆️</span>
+            <span className="nav-link__icon"><i className="fa-solid fa-upload" /></span>
             {!sc && <span>Import CSV</span>}
           </button>
           <input type="file" id="import-file" accept=".csv" style={{ display:'none' }} onChange={importCSV} />
@@ -330,11 +330,11 @@ export default function App({ onBackToHub }) {
 
       <div className="sidebar__footer">
         <button className="nav-link" onClick={onBackToHub} title="Butler Society Hub">
-          <span className="nav-link__icon">🏠</span>
+          <span className="nav-link__icon"><i className="fa-solid fa-house" /></span>
           {!sc && <span>Butler Society</span>}
         </button>
         <button className="nav-link" onClick={logout} title="Sign out">
-          <span className="nav-link__icon">🚪</span>
+          <span className="nav-link__icon"><i className="fa-solid fa-right-from-bracket" /></span>
           {!sc && <span>Sign out</span>}
         </button>
       </div>
@@ -344,7 +344,7 @@ export default function App({ onBackToHub }) {
         onClick={() => setSidebarCollapsed(p => !p)}
         title={sc ? 'Expand sidebar' : 'Collapse sidebar'}
       >
-        {sc ? '›' : '‹'}
+        <i className={`fa-solid ${sc ? 'fa-chevron-right' : 'fa-chevron-left'}`} />
       </button>
     </aside>
 
@@ -352,7 +352,9 @@ export default function App({ onBackToHub }) {
       <div className="topbar">
         <div className="topbar__left">
           <span className="topbar__title">
-            {panel === 'labels' ? 'Label Generator' : 'Coffee'}
+            {panel === 'home' ? 'Butler Coffee'
+              : panel === 'labels' ? 'Label Generator'
+              : 'Coffee'}
           </span>
           {isCoffeePanel && <span className="topbar__count">{coffees.length} entr{coffees.length === 1 ? 'y' : 'ies'}</span>}
         </div>
@@ -361,7 +363,9 @@ export default function App({ onBackToHub }) {
         </div>
       </div>
       <div className="content">
-        {panel === 'labels'
+        {panel === 'home'
+          ? <HomePanel setPanel={setPanel} />
+          : panel === 'labels'
           ? <LabelsPanel coffees={coffees} />
           : panel === 'list'
           ? <ListPanel {...{ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, originFilter, setOriginFilter, visibilityFilter, setVisibilityFilter, filtered, openForm, openView, setPendingDeleteId }} />
@@ -395,6 +399,69 @@ export default function App({ onBackToHub }) {
       </div>
     </div></div>}
   </>;
+}
+
+// ── Home Panel (Butler Coffee sub-landing) ────────────────────────────────────
+function HomePanel({ setPanel }) {
+  const SECTIONS = [
+    {
+      id: 'list',
+      icon: 'fa-mug-hot',
+      title: 'Coffee',
+      description: 'Browse and manage the coffee catalog',
+      soon: false,
+    },
+    {
+      id: 'labels',
+      icon: 'fa-tag',
+      title: 'Labels',
+      description: 'Generate bag labels for any roast',
+      soon: false,
+    },
+    {
+      id: null,
+      icon: 'fa-gears',
+      title: 'Machines',
+      description: 'Equipment catalogue',
+      soon: true,
+    },
+    {
+      id: null,
+      icon: 'fa-pen-nib',
+      title: 'Blog',
+      description: 'Articles and content',
+      soon: true,
+    },
+  ];
+
+  return (
+    <div className="home-panel">
+      <div className="home-panel__header">
+        <h1 className="home-panel__title">Butler Coffee</h1>
+        <p className="home-panel__sub">Admin Dashboard</p>
+      </div>
+      <div className="app-grid">
+        {SECTIONS.map(s => (
+          <div
+            key={s.title}
+            className={`app-card${s.soon ? ' app-card--soon' : ''}`}
+            onClick={() => !s.soon && s.id && setPanel(s.id)}
+            title={s.soon ? 'Coming soon' : undefined}
+          >
+            <div className="app-card__icon"><i className={`fa-solid ${s.icon}`} /></div>
+            <div className="app-card__body">
+              <div className="app-card__name">{s.title}</div>
+              <div className="app-card__desc">{s.description}</div>
+            </div>
+            {s.soon
+              ? <div className="app-card__badge">Soon</div>
+              : <div className="app-card__arrow"><i className="fa-solid fa-arrow-right" /></div>
+            }
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ── List Panel ────────────────────────────────────────────────────────────────

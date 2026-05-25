@@ -4,21 +4,21 @@ import { useAuth } from './AuthContext';
 const APPS = [
   {
     id:       'coffee',
-    icon:     '☕',
+    icon:     'fa-mug-hot',
     name:     'Butler Coffee',
     desc:     'Coffee catalog, label generator, subscription management',
     status:   'active',
   },
   {
     id:       'machines',
-    icon:     '⚙️',
+    icon:     'fa-gears',
     name:     'Machines',
     desc:     'Equipment inventory and maintenance tracking',
     status:   'soon',
   },
   {
     id:       'blog',
-    icon:     '✍️',
+    icon:     'fa-pen-nib',
     name:     'Blog',
     desc:     'Content management for butler.coffee',
     status:   'soon',
@@ -62,13 +62,13 @@ export default function LandingPage({ onEnterApp }) {
               onClick={() => app.status === 'active' && onEnterApp(app.id)}
               title={app.status === 'soon' ? 'Coming soon' : undefined}
             >
-              <div className="app-card__icon">{app.icon}</div>
+              <div className="app-card__icon"><i className={`fa-solid ${app.icon}`} /></div>
               <div className="app-card__body">
                 <div className="app-card__name">{app.name}</div>
                 <div className="app-card__desc">{app.desc}</div>
               </div>
               {app.status === 'active'
-                ? <div className="app-card__arrow">→</div>
+                ? <div className="app-card__arrow"><i className="fa-solid fa-arrow-right" /></div>
                 : <div className="app-card__badge">Soon</div>
               }
             </div>

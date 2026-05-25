@@ -1702,3 +1702,73 @@
       flex: 1;
       text-align: center;
     }
+
+    /* ─── FORGOT PASSWORD ────────────────────── */
+    .login-forgot {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 0.83rem;
+      cursor: pointer;
+      text-align: center;
+      padding: 4px;
+      transition: color var(--ease);
+    }
+    .login-forgot:hover { color: var(--text); }
+
+    .login-reset-hint {
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .login-reset-success {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 8px 0 4px;
+      text-align: center;
+    }
+    .login-reset-success__icon {
+      font-size: 2.4rem;
+      color: var(--green);
+    }
+    .login-reset-success p {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+
+    /* ─── HOME PANEL (Coffee sub-landing) ────── */
+    .home-panel {
+      padding: 32px 24px 24px;
+      max-width: 700px;
+    }
+    .home-panel__header {
+      margin-bottom: 28px;
+    }
+    .home-panel__title {
+      font-family: var(--font-head);
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .home-panel__sub {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    /* ─── FA ICON SIZING IN NAV ──────────────── */
+    .nav-link__icon .fa-solid,
+    .nav-link__icon .fa-regular { font-size: 1rem; }
+    .mobile-nav__icon .fa-solid,
+    .mobile-nav__icon .fa-regular { font-size: 1.15rem; }
+    .mobile-menu__item-icon .fa-solid,
+    .mobile-menu__item-icon .fa-regular { font-size: 1rem; }
+    .sidebar__toggle .fa-solid { font-size: 0.75rem; }

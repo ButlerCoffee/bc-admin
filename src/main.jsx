@@ -27,7 +27,7 @@ function MobileNav({ currentApp, setCurrentApp }) {
           className={`mobile-nav__item${!currentApp ? ' mobile-nav__item--active' : ''}`}
           onClick={() => goTo(null)}
         >
-          <span className="mobile-nav__icon">🏠</span>
+          <span className="mobile-nav__icon"><i className="fa-solid fa-house" /></span>
           <span className="mobile-nav__label">Home</span>
         </button>
 
@@ -35,7 +35,7 @@ function MobileNav({ currentApp, setCurrentApp }) {
           className={`mobile-nav__item${currentApp === 'coffee' ? ' mobile-nav__item--active' : ''}`}
           onClick={() => goTo('coffee')}
         >
-          <span className="mobile-nav__icon">☕</span>
+          <span className="mobile-nav__icon"><i className="fa-solid fa-mug-hot" /></span>
           <span className="mobile-nav__label">Coffee</span>
         </button>
 
@@ -46,7 +46,7 @@ function MobileNav({ currentApp, setCurrentApp }) {
           className={`mobile-nav__item${menuOpen ? ' mobile-nav__item--active' : ''}`}
           onClick={() => setMenuOpen(p => !p)}
         >
-          <span className="mobile-nav__icon">☰</span>
+          <span className="mobile-nav__icon"><i className="fa-solid fa-bars" /></span>
           <span className="mobile-nav__label">Menu</span>
         </button>
       </nav>
@@ -70,18 +70,18 @@ function MobileNav({ currentApp, setCurrentApp }) {
             <div className="mobile-menu__divider" />
 
             <button className="mobile-menu__item" onClick={() => { goTo(null); }}>
-              <span className="mobile-menu__item-icon">🏠</span>
+              <span className="mobile-menu__item-icon"><i className="fa-solid fa-house" /></span>
               <span>Butler Society Hub</span>
             </button>
             <button className="mobile-menu__item" onClick={() => { goTo('coffee'); }}>
-              <span className="mobile-menu__item-icon">☕</span>
+              <span className="mobile-menu__item-icon"><i className="fa-solid fa-mug-hot" /></span>
               <span>Butler Coffee</span>
             </button>
 
             <div className="mobile-menu__divider" />
 
             <button className="mobile-menu__item mobile-menu__item--danger" onClick={logout}>
-              <span className="mobile-menu__item-icon">🚪</span>
+              <span className="mobile-menu__item-icon"><i className="fa-solid fa-right-from-bracket" /></span>
               <span>Sign out</span>
             </button>
           </div>
