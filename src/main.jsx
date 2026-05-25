@@ -3,9 +3,10 @@ import { createRoot } from 'react-dom/client';
 import './styles.css';
 
 import { AuthProvider, useAuth } from './AuthContext.jsx';
-import LoginPage   from './LoginPage.jsx';
-import LandingPage from './LandingPage.jsx';
-import App         from './App.jsx';
+import LoginPage          from './LoginPage.jsx';
+import LandingPage        from './LandingPage.jsx';
+import App                from './App.jsx';
+import SubscriptionPanel  from './SubscriptionPanel.jsx';
 
 // ── Mobile bottom nav + menu sheet ────────────────────────────────────────────
 function MobileNav({ currentApp, setCurrentApp }) {
@@ -39,8 +40,13 @@ function MobileNav({ currentApp, setCurrentApp }) {
           <span className="mobile-nav__label">Coffee</span>
         </button>
 
-        {/* Reserved slot */}
-        <div className="mobile-nav__item mobile-nav__item--empty" />
+        <button
+          className={`mobile-nav__item${currentApp === 'subs' ? ' mobile-nav__item--active' : ''}`}
+          onClick={() => goTo('subs')}
+        >
+          <span className="mobile-nav__icon"><i className="fa-solid fa-layer-group" /></span>
+          <span className="mobile-nav__label">Subs</span>
+        </button>
 
         <button
           className={`mobile-nav__item${menuOpen ? ' mobile-nav__item--active' : ''}`}
@@ -77,6 +83,10 @@ function MobileNav({ currentApp, setCurrentApp }) {
               <span className="mobile-menu__item-icon"><i className="fa-solid fa-mug-hot" /></span>
               <span>Butler Coffee</span>
             </button>
+            <button className="mobile-menu__item" onClick={() => { goTo('subs'); }}>
+              <span className="mobile-menu__item-icon"><i className="fa-solid fa-layer-group" /></span>
+              <span>Subscriptions</span>
+            </button>
 
             <div className="mobile-menu__divider" />
 
@@ -106,10 +116,14 @@ function Root() {
 
   if (!user) return <LoginPage />;
 
+  const backToHub = () => setCurrentApp(null);
+
   return (
     <>
       {currentApp === 'coffee'
-        ? <App onBackToHub={() => setCurrentApp(null)} />
+        ? <App onBackToHub={backToHub} />
+        : currentApp === 'subs'
+        ? <SubscriptionPanel onBackToHub={backToHub} />
         : <LandingPage onEnterApp={setCurrentApp} />
       }
       <MobileNav currentApp={currentApp} setCurrentApp={setCurrentApp} />

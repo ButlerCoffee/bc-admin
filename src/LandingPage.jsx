@@ -10,6 +10,13 @@ const APPS = [
     status:   'active',
   },
   {
+    id:       'subs',
+    icon:     'fa-layer-group',
+    name:     'Subscriptions',
+    desc:     'Subscription tier content, pricing & buy links',
+    status:   'active',
+  },
+  {
     id:       'machines',
     icon:     'fa-gears',
     name:     'Machines',

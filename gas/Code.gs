@@ -1,15 +1,19 @@
 /**
  * Butler Coffee — Google Apps Script Backend
  * Spreadsheet: https://docs.google.com/spreadsheets/d/1nT5v6u7pz8qv1cloSDT7GpDDfodXk1LID8rMeRkzIeY
- *gg
+ *
  * DEPLOY:
  *  1. Open Extensions → Apps Script in the spreadsheet
  *  2. Paste this entire file, replacing any existing code
- *  3. Deploy → New Deployment → Web App
- *     - Execute as: Me
- *     - Who has access: Anyone
- *  4. Copy the /exec URL and paste it into your .env.local as VITE_BUTLER_COFFEE_API_URL
- *  5. Re-deploy (New Deployment) every time you change this script
+ *  3. Deploy → Manage Deployments → Edit (pencil icon on your existing deployment)
+ *     - Create a new version, click Deploy — the URL stays the same
+ *  4. (First-time only) Set VITE_BUTLER_COFFEE_API_URL in Netlify env vars
+ *
+ * ROUTING:
+ *  GET  /exec             → Coffee sheet
+ *  GET  /exec?sheet=subs  → Subcription sheet
+ *  POST /exec             → Coffee (body.sheet undefined)
+ *  POST /exec             → Subs   (body.sheet === 'subs')
  */
 
 const SS_ID    = '1nT5v6u7pz8qv1cloSDT7GpDDfodXk1LID8rMeRkzIeY';
@@ -218,10 +222,13 @@ function getSheet() {
   return SpreadsheetApp.openById(SS_ID).getSheetByName(SHEET_NAME);
 }
 
-// ─── doGet — read all coffees ─────────────────────────────────────────────────
+// ─── doGet — read all coffees OR subscriptions ───────────────────────────────
 
 function doGet(e) {
   try {
+    if (e && e.parameter && e.parameter.sheet === 'subs') {
+      return doGetSubs();
+    }
     const sheet = getSheet();
     const data  = sheet.getDataRange().getValues();
     const coffees = [];
@@ -248,6 +255,15 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
 
+    // Route to Subscription handlers
+    if (body.sheet === 'subs') {
+      if (body.action === 'save')        return handleSaveSub(body.subscription);
+      if (body.action === 'delete')      return handleDeleteSub(body.id);
+      if (body.action === 'uploadImage') return handleUploadImage(body.filename, body.mimeType, body.data);
+      return jsonOut({ ok: false, error: 'Unknown subs action: ' + body.action });
+    }
+
+    // Coffee handlers (default)
     if (body.action === 'save')        return handleSave(body.coffee);
     if (body.action === 'delete')      return handleDelete(body.id);
     if (body.action === 'import')      return handleImport(body.coffees);
@@ -358,4 +374,184 @@ function handleImport(coffees) {
   }
 
   return jsonOut({ ok: true, data: coffees });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── SUBSCRIPTION SHEET ───────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const SHEET_NAME_SUBS = 'Subcription'; // exact tab name (note: typo is intentional — matches the sheet)
+
+// Column indices (0-based) for the Subcription sheet
+// Columns A–AD (0–29) come from the sheet headers you defined.
+// Column AE (30) is "image" — add this column to your sheet.
+const SC = {
+  ID:             0,
+  TITLE:          1,
+  EYEBROW_EN:     2,
+  SHORT_DESC_EN:  3,
+  LONG_DESC_EN:   4,
+  FEAT01_EN:      5,
+  FEAT02_EN:      6,
+  FEAT03_EN:      7,
+  FEAT04_EN:      8,
+  COMPOSITION_EN: 9,
+  FLAVOR_EN:      10,
+  STRUCTURE_EN:   11,
+  PURPOSE_EN:     12,
+  EYEBROW_ES:     13,
+  SHORT_DESC_ES:  14,
+  LONG_DESC_ES:   15,
+  FEAT01_ES:      16,
+  FEAT02_ES:      17,
+  FEAT03_ES:      18,
+  FEAT04_ES:      19,
+  COMPOSITION_ES: 20,
+  FLAVOR_ES:      21,
+  STRUCTURE_ES:   22,
+  PURPOSE_ES:     23,
+  PRICE_250G:     24,
+  PRICE_500G:     25,
+  PRICE_1KG:      26,
+  LINK_250G:      27,
+  LINK_500G:      28,
+  LINK_1KG:       29,
+  IMAGE:          30   // add column "image" (AE) to your sheet
+};
+
+const TOTAL_COLS_SUBS = 31;
+
+function getSheetSubs() {
+  return SpreadsheetApp.openById(SS_ID).getSheetByName(SHEET_NAME_SUBS);
+}
+
+function rowToAppSub(row) {
+  return {
+    id:            String(row[SC.ID]             || ''),
+    title:         String(row[SC.TITLE]          || ''),
+    eyebrowEN:     String(row[SC.EYEBROW_EN]     || ''),
+    shortDescEN:   String(row[SC.SHORT_DESC_EN]  || ''),
+    longDescEN:    String(row[SC.LONG_DESC_EN]   || ''),
+    feat01EN:      String(row[SC.FEAT01_EN]      || ''),
+    feat02EN:      String(row[SC.FEAT02_EN]      || ''),
+    feat03EN:      String(row[SC.FEAT03_EN]      || ''),
+    feat04EN:      String(row[SC.FEAT04_EN]      || ''),
+    compositionEN: String(row[SC.COMPOSITION_EN] || ''),
+    flavorEN:      String(row[SC.FLAVOR_EN]      || ''),
+    structureEN:   String(row[SC.STRUCTURE_EN]   || ''),
+    purposeEN:     String(row[SC.PURPOSE_EN]     || ''),
+    eyebrowES:     String(row[SC.EYEBROW_ES]     || ''),
+    shortDescES:   String(row[SC.SHORT_DESC_ES]  || ''),
+    longDescES:    String(row[SC.LONG_DESC_ES]   || ''),
+    feat01ES:      String(row[SC.FEAT01_ES]      || ''),
+    feat02ES:      String(row[SC.FEAT02_ES]      || ''),
+    feat03ES:      String(row[SC.FEAT03_ES]      || ''),
+    feat04ES:      String(row[SC.FEAT04_ES]      || ''),
+    compositionES: String(row[SC.COMPOSITION_ES] || ''),
+    flavorES:      String(row[SC.FLAVOR_ES]      || ''),
+    structureES:   String(row[SC.STRUCTURE_ES]   || ''),
+    purposeES:     String(row[SC.PURPOSE_ES]     || ''),
+    price250g:     parseMoney(row[SC.PRICE_250G]),
+    price500g:     parseMoney(row[SC.PRICE_500G]),
+    price1kg:      parseMoney(row[SC.PRICE_1KG]),
+    link250g:      String(row[SC.LINK_250G]      || ''),
+    link500g:      String(row[SC.LINK_500G]      || ''),
+    link1kg:       String(row[SC.LINK_1KG]       || ''),
+    image:         String(row[SC.IMAGE]          || ''),
+    updatedAt:     new Date().toISOString()
+  };
+}
+
+function applyToRowSub(row, sub) {
+  row[SC.TITLE]          = sub.title          || '';
+  row[SC.EYEBROW_EN]     = sub.eyebrowEN      || '';
+  row[SC.SHORT_DESC_EN]  = sub.shortDescEN    || '';
+  row[SC.LONG_DESC_EN]   = sub.longDescEN     || '';
+  row[SC.FEAT01_EN]      = sub.feat01EN       || '';
+  row[SC.FEAT02_EN]      = sub.feat02EN       || '';
+  row[SC.FEAT03_EN]      = sub.feat03EN       || '';
+  row[SC.FEAT04_EN]      = sub.feat04EN       || '';
+  row[SC.COMPOSITION_EN] = sub.compositionEN  || '';
+  row[SC.FLAVOR_EN]      = sub.flavorEN       || '';
+  row[SC.STRUCTURE_EN]   = sub.structureEN    || '';
+  row[SC.PURPOSE_EN]     = sub.purposeEN      || '';
+  row[SC.EYEBROW_ES]     = sub.eyebrowES      || '';
+  row[SC.SHORT_DESC_ES]  = sub.shortDescES    || '';
+  row[SC.LONG_DESC_ES]   = sub.longDescES     || '';
+  row[SC.FEAT01_ES]      = sub.feat01ES       || '';
+  row[SC.FEAT02_ES]      = sub.feat02ES       || '';
+  row[SC.FEAT03_ES]      = sub.feat03ES       || '';
+  row[SC.FEAT04_ES]      = sub.feat04ES       || '';
+  row[SC.COMPOSITION_ES] = sub.compositionES  || '';
+  row[SC.FLAVOR_ES]      = sub.flavorES       || '';
+  row[SC.STRUCTURE_ES]   = sub.structureES    || '';
+  row[SC.PURPOSE_ES]     = sub.purposeES      || '';
+  if (sub.price250g !== undefined) row[SC.PRICE_250G] = sub.price250g === '' ? '' : Number(sub.price250g) || '';
+  if (sub.price500g !== undefined) row[SC.PRICE_500G] = sub.price500g === '' ? '' : Number(sub.price500g) || '';
+  if (sub.price1kg  !== undefined) row[SC.PRICE_1KG]  = sub.price1kg  === '' ? '' : Number(sub.price1kg)  || '';
+  row[SC.LINK_250G]      = sub.link250g       || '';
+  row[SC.LINK_500G]      = sub.link500g       || '';
+  row[SC.LINK_1KG]       = sub.link1kg        || '';
+  row[SC.IMAGE]          = sub.image          || '';
+  return row;
+}
+
+// ─── Subs doGet ───────────────────────────────────────────────────────────────
+
+function doGetSubs() {
+  const sheet = getSheetSubs();
+  const data  = sheet.getDataRange().getValues();
+  const subs  = [];
+
+  // Row 0 = headers, Row 1 = template (ID=0) → start at index 2
+  for (let i = 2; i < data.length; i++) {
+    const row = data[i];
+    if (String(row[SC.ID]).trim() === '' && String(row[SC.TITLE]).trim() === '') continue;
+    subs.push(rowToAppSub(row));
+  }
+  return jsonOut({ ok: true, data: subs });
+}
+
+// ─── Subs Save ────────────────────────────────────────────────────────────────
+
+function handleSaveSub(sub) {
+  const sheet = getSheetSubs();
+  const data  = sheet.getDataRange().getValues();
+
+  for (let i = 2; i < data.length; i++) {
+    if (String(data[i][SC.ID]) === String(sub.id)) {
+      const sheetRow   = i + 1;
+      const updatedRow = applyToRowSub(ensureRowLength([...data[i]], TOTAL_COLS_SUBS), sub);
+      sheet.getRange(sheetRow, 1, 1, TOTAL_COLS_SUBS).setValues([updatedRow]);
+      return jsonOut({ ok: true, data: rowToAppSub(updatedRow) });
+    }
+  }
+
+  // New row
+  let maxId = 0;
+  for (let i = 1; i < data.length; i++) {
+    const id = parseInt(data[i][SC.ID], 10);
+    if (!isNaN(id) && id > maxId) maxId = id;
+  }
+  const newId = maxId + 1;
+  const newRow = new Array(TOTAL_COLS_SUBS).fill('');
+  newRow[SC.ID] = newId;
+  applyToRowSub(newRow, sub);
+  sheet.appendRow(newRow);
+  return jsonOut({ ok: true, data: rowToAppSub(newRow) });
+}
+
+// ─── Subs Delete ──────────────────────────────────────────────────────────────
+
+function handleDeleteSub(id) {
+  const sheet = getSheetSubs();
+  const data  = sheet.getDataRange().getValues();
+
+  for (let i = 2; i < data.length; i++) {
+    if (String(data[i][SC.ID]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return jsonOut({ ok: true, data: { deleted: id } });
+    }
+  }
+  return jsonOut({ ok: false, error: 'Row not found for id: ' + id });
 }
