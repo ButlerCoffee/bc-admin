@@ -6,8 +6,6 @@ import { AuthProvider, useAuth } from './AuthContext.jsx';
 import LoginPage          from './LoginPage.jsx';
 import LandingPage        from './LandingPage.jsx';
 import App                from './App.jsx';
-import SubscriptionPanel  from './SubscriptionPanel.jsx';
-
 // ── Mobile bottom nav + menu sheet ────────────────────────────────────────────
 function MobileNav({ currentApp, setCurrentApp }) {
   const { user, logout } = useAuth();
@@ -38,14 +36,6 @@ function MobileNav({ currentApp, setCurrentApp }) {
         >
           <span className="mobile-nav__icon"><i className="fa-solid fa-mug-hot" /></span>
           <span className="mobile-nav__label">Coffee</span>
-        </button>
-
-        <button
-          className={`mobile-nav__item${currentApp === 'subs' ? ' mobile-nav__item--active' : ''}`}
-          onClick={() => goTo('subs')}
-        >
-          <span className="mobile-nav__icon"><i className="fa-solid fa-layer-group" /></span>
-          <span className="mobile-nav__label">Subs</span>
         </button>
 
         <button
@@ -83,11 +73,6 @@ function MobileNav({ currentApp, setCurrentApp }) {
               <span className="mobile-menu__item-icon"><i className="fa-solid fa-mug-hot" /></span>
               <span>Butler Coffee</span>
             </button>
-            <button className="mobile-menu__item" onClick={() => { goTo('subs'); }}>
-              <span className="mobile-menu__item-icon"><i className="fa-solid fa-layer-group" /></span>
-              <span>Subscriptions</span>
-            </button>
-
             <div className="mobile-menu__divider" />
 
             <button className="mobile-menu__item mobile-menu__item--danger" onClick={logout}>
@@ -122,8 +107,6 @@ function Root() {
     <>
       {currentApp === 'coffee'
         ? <App onBackToHub={backToHub} />
-        : currentApp === 'subs'
-        ? <SubscriptionPanel onBackToHub={backToHub} />
         : <LandingPage onEnterApp={setCurrentApp} />
       }
       <MobileNav currentApp={currentApp} setCurrentApp={setCurrentApp} />

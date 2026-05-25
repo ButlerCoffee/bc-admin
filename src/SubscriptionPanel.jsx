@@ -1,8 +1,12 @@
+/**
+ * SubscriptionPanel — content-only component.
+ * Rendered inside App.jsx's existing sidebar + main layout
+ * when panel === 'subs'. No sidebar/topbar of its own.
+ */
 import { useEffect, useMemo, useState } from 'react';
 import { apiCall } from './lib/api.js';
-import { useAuth } from './AuthContext.jsx';
 
-// ── Image helpers (same as Coffee panel) ──────────────────────────────────────
+// ── Image helpers ─────────────────────────────────────────────────────────────
 const DRIVE_IMG_FALLBACK = '1LYVoFp3Y1jv2i1ow7G7nPxCCQQzLSVZp';
 const DEFAULT_IMAGE = `https://drive.google.com/thumbnail?id=${DRIVE_IMG_FALLBACK}&sz=w400`;
 
@@ -15,29 +19,7 @@ function toImageUrl(url) {
   return url;
 }
 
-// ── Data model ────────────────────────────────────────────────────────────────
-const emptySub = {
-  id: '',
-  title: '',
-  eyebrowEN: '', shortDescEN: '', longDescEN: '',
-  feat01EN: '', feat02EN: '', feat03EN: '', feat04EN: '',
-  compositionEN: '', flavorEN: '', structureEN: '', purposeEN: '',
-  eyebrowES: '', shortDescES: '', longDescES: '',
-  feat01ES: '', feat02ES: '', feat03ES: '', feat04ES: '',
-  compositionES: '', flavorES: '', structureES: '', purposeES: '',
-  price250g: '', price500g: '', price1kg: '',
-  link250g: '', link500g: '', link1kg: '',
-  image: '',
-  updatedAt: ''
-};
-
-const SIZES = [
-  { key: '250g', label: '250 g' },
-  { key: '500g', label: '500 g' },
-  { key: '1kg',  label: '1 kg'  },
-];
-
-// ── Utilities ─────────────────────────────────────────────────────────────────
+// ── Markdown renderer ─────────────────────────────────────────────────────────
 function renderMarkdown(md) {
   if (!md) return '';
   const esc    = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -60,21 +42,40 @@ function renderMarkdown(md) {
   }).join('');
 }
 
-// ── Main panel ────────────────────────────────────────────────────────────────
-export default function SubscriptionPanel({ onBackToHub }) {
-  const [subs, setSubs] = useState([]);
-  const [loading, setLoading]   = useState(false);
-  const [toasts, setToasts]     = useState([]);
-  const [panel, setPanel]       = useState('list');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [currentId, setCurrentId] = useState(null);
-  const [form, setForm]         = useState(emptySub);
-  const [search, setSearch]     = useState('');
-  const [pendingDeleteId, setPendingDeleteId]     = useState(null);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+// ── Data model ────────────────────────────────────────────────────────────────
+const emptySub = {
+  id: '', title: '',
+  eyebrowEN: '', shortDescEN: '', longDescEN: '',
+  feat01EN: '', feat02EN: '', feat03EN: '', feat04EN: '',
+  compositionEN: '', flavorEN: '', structureEN: '', purposeEN: '',
+  eyebrowES: '', shortDescES: '', longDescES: '',
+  feat01ES: '', feat02ES: '', feat03ES: '', feat04ES: '',
+  compositionES: '', flavorES: '', structureES: '', purposeES: '',
+  cost200g: '', cost250g: '', cost500g: '', cost1kg: '',
+  price200g: '', price250g: '', price500g: '', price1kg: '',
+  link200g: '', link250g: '', link500g: '', link1kg: '',
+  image: '', updatedAt: ''
+};
 
-  const { logout } = useAuth();
-  const sc = sidebarCollapsed;
+// All four sizes; the form shows all but hints which tier uses which
+const ALL_SIZES = [
+  { key: '200g', label: '200 g', hint: 'Summit only'      },
+  { key: '250g', label: '250 g', hint: 'Base · Explorer · Alpine' },
+  { key: '500g', label: '500 g', hint: 'Base · Explorer · Alpine' },
+  { key: '1kg',  label: '1 kg',  hint: 'Base · Explorer · Alpine' },
+];
+
+// ── Main component (content only) ─────────────────────────────────────────────
+export default function SubscriptionPanel() {
+  const [subs,   setSubs]   = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [toasts,  setToasts]  = useState([]);
+  const [subPanel, setSubPanel] = useState('list');   // 'list' | 'view' | 'form'
+  const [currentId, setCurrentId] = useState(null);
+  const [form, setForm] = useState(emptySub);
+  const [search, setSearch] = useState('');
+  const [pendingDeleteId,  setPendingDeleteId]  = useState(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   function toast(msg, type = 'success') {
     const id = Date.now() + Math.random();
@@ -87,10 +88,9 @@ export default function SubscriptionPanel({ onBackToHub }) {
     try {
       const data = await apiCall('GET', undefined, 'subs');
       setSubs(Array.isArray(data) ? data : []);
-      if (showToast) toast('Synced from Google Sheet!', 'success');
+      if (showToast) toast('Synced from Google Sheet!');
     } catch (err) {
       toast('Could not sync — check API URL.', 'error');
-      console.error(err);
     } finally { setLoading(false); }
   }
   useEffect(() => { loadFromSheet(); }, []);
@@ -102,19 +102,17 @@ export default function SubscriptionPanel({ onBackToHub }) {
     );
   }, [subs, search]);
 
-  function updateField(key, value) {
-    setForm(f => ({ ...f, [key]: value }));
-  }
+  function updateField(key, value) { setForm(f => ({ ...f, [key]: value })); }
 
-  function openView(id) { setCurrentId(id); setPanel('view'); window.scrollTo(0,0); }
+  function openView(id) { setCurrentId(id); setSubPanel('view'); window.scrollTo(0,0); }
   function openForm(id = null) {
     const sub = id ? subs.find(s => s.id === id) : null;
     setCurrentId(id);
     setForm(sub ? { ...emptySub, ...sub } : emptySub);
-    setPanel('form');
+    setSubPanel('form');
     window.scrollTo(0,0);
   }
-  function closeForm() { setPanel('list'); setCurrentId(null); setForm(emptySub); }
+  function closeForm() { setSubPanel('list'); setCurrentId(null); setForm(emptySub); }
 
   async function saveSub(e) {
     e.preventDefault();
@@ -126,7 +124,7 @@ export default function SubscriptionPanel({ onBackToHub }) {
       setSubs(prev => prev.some(s => s.id === saved.id)
         ? prev.map(s => s.id === saved.id ? saved : s)
         : [saved, ...prev]);
-      toast('Subscription saved!', 'success');
+      toast('Subscription tier saved!');
       closeForm();
     } catch (err) { toast(`Save failed — ${err.message}`, 'error'); }
     finally { setLoading(false); }
@@ -141,7 +139,7 @@ export default function SubscriptionPanel({ onBackToHub }) {
       await apiCall('POST', { action: 'delete', id }, 'subs');
       setSubs(prev => prev.filter(s => s.id !== id));
       if (currentId) closeForm();
-      toast('Subscription deleted.', 'error');
+      toast('Tier deleted.', 'error');
     } catch (err) { toast(`Delete failed — ${err.message}`, 'error'); }
     finally { setLoading(false); }
   }
@@ -158,99 +156,49 @@ export default function SubscriptionPanel({ onBackToHub }) {
         const base64 = dataUrl.split(',')[1];
         const result = await apiCall('POST', { action: 'uploadImage', filename: file.name, mimeType: file.type, data: base64 }, 'subs');
         setForm(f => ({ ...f, image: result.url }));
-        toast('Image uploaded to Drive!', 'success');
-      } catch (err) {
-        toast(`Upload failed — ${err.message}`, 'error');
-      } finally { setLoading(false); }
+        toast('Image uploaded to Drive!');
+      } catch (err) { toast(`Upload failed — ${err.message}`, 'error'); }
+      finally { setLoading(false); }
     };
     reader.readAsDataURL(file);
   }
 
-  const isFormPanel = ['list','view','form'].includes(panel);
-
   return <>
-    {/* ── Sidebar ── */}
-    <aside className={`sidebar${sc ? ' sidebar--collapsed' : ''}`}>
-      <div className="sidebar__brand">
-        <img src="/butler-logo.png" alt="Butler Coffee"
-          onError={e => { e.currentTarget.src=''; e.currentTarget.style.display='none'; }} />
-        {!sc && <div className="sidebar__brand-text">
-          <div className="sidebar__brand-name">Butler Coffee</div>
-          <div className="sidebar__brand-sub">Admin DB</div>
-        </div>}
-      </div>
+    {/* ── content panels ── */}
+    {subPanel === 'list' && (
+      <SubsListPanel
+        search={search} setSearch={setSearch}
+        filtered={filtered} total={subs.length}
+        openForm={openForm} openView={openView}
+        setPendingDeleteId={setPendingDeleteId}
+        onSync={() => loadFromSheet(true)}
+      />
+    )}
+    {subPanel === 'view' && (
+      <SubsViewPanel
+        sub={subs.find(s => s.id === currentId)}
+        onBack={closeForm} onEdit={openForm}
+      />
+    )}
+    {subPanel === 'form' && (
+      <SubsFormPanel
+        form={form} updateField={updateField}
+        saveSub={saveSub} closeForm={closeForm}
+        currentId={currentId}
+        setPendingDeleteId={setPendingDeleteId}
+        onImageUpload={handleImageUpload}
+      />
+    )}
 
-      <nav className="sidebar__nav">
-        <div className="nav-section">
-          {!sc && <div className="nav-section__label">Subscriptions</div>}
-          <button
-            className={`nav-link${isFormPanel ? ' active' : ''}`}
-            onClick={() => setPanel('list')}
-            title="Subscriptions"
-          >
-            <span className="nav-link__icon"><i className="fa-solid fa-layer-group" /></span>
-            {!sc && <><span>Tiers</span><span className="nav-link__badge">{subs.length}</span></>}
-          </button>
-        </div>
-
-        <div className="nav-section">
-          {!sc && <div className="nav-section__label">Tools</div>}
-          <button className="nav-link" onClick={() => loadFromSheet(true)} title="Sync">
-            <span className="nav-link__icon"><i className="fa-solid fa-rotate" /></span>
-            {!sc && <span>Sync</span>}
-          </button>
-        </div>
-      </nav>
-
-      <div className="sidebar__footer">
-        <button className="nav-link" onClick={onBackToHub} title="Butler Society Hub">
-          <span className="nav-link__icon"><i className="fa-solid fa-house" /></span>
-          {!sc && <span>Butler Society</span>}
-        </button>
-        <button className="nav-link" onClick={logout} title="Sign out">
-          <span className="nav-link__icon"><i className="fa-solid fa-right-from-bracket" /></span>
-          {!sc && <span>Sign out</span>}
-        </button>
-      </div>
-
-      <button
-        className="sidebar__toggle"
-        onClick={() => setSidebarCollapsed(p => !p)}
-        title={sc ? 'Expand sidebar' : 'Collapse sidebar'}
-      >
-        <i className={`fa-solid ${sc ? 'fa-chevron-right' : 'fa-chevron-left'}`} />
-      </button>
-    </aside>
-
-    {/* ── Main content ── */}
-    <div className={`main${sc ? ' main--collapsed' : ''}`}>
-      <div className="topbar">
-        <div className="topbar__left">
-          <span className="topbar__title">Subscriptions</span>
-          {isFormPanel && <span className="topbar__count">{subs.length} tier{subs.length !== 1 ? 's' : ''}</span>}
-        </div>
-        <div className="topbar__right">
-          {panel === 'list' && <button className="btn btn--primary" onClick={() => openForm(null)}>+ Add Tier</button>}
-        </div>
-      </div>
-
-      <div className="content">
-        {panel === 'list'
-          ? <SubsListPanel {...{ search, setSearch, filtered, openForm, openView, setPendingDeleteId }} />
-          : panel === 'view'
-          ? <SubsViewPanel sub={subs.find(s => s.id === currentId)} onBack={closeForm} onEdit={openForm} />
-          : <SubsFormPanel {...{ form, updateField, saveSub, closeForm, currentId, setPendingDeleteId, onImageUpload: handleImageUpload }} />
-        }
-      </div>
-    </div>
-
-    {/* ── Overlays ── */}
+    {/* ── loading overlay ── */}
     {loading && (
       <div className="loading-overlay" style={{ display:'flex' }}>
         <div className="loading-spinner" />
         <div className="loading-label">Syncing with Google Sheet…</div>
       </div>
     )}
+
+    {/* ── toasts ── */}
     <div className="toast-wrap">
       {toasts.map(t => (
         <div key={t.id} className={`toast toast--${t.type}`}>
@@ -258,19 +206,19 @@ export default function SubscriptionPanel({ onBackToHub }) {
         </div>
       ))}
     </div>
+
+    {/* ── delete confirmation ── */}
     {pendingDeleteId && (
       <div className="dialog-overlay open">
         <div className="dialog">
-          <div className="dialog__title">Delete this subscription tier?</div>
-          <div className="dialog__text">This permanently removes the entry from the database and cannot be undone.</div>
+          <div className="dialog__title">Delete this tier?</div>
+          <div className="dialog__text">This permanently removes the entry. It cannot be undone.</div>
           <div className="dialog__confirm">
             <label className="dialog__confirm-label">Type DELETE to confirm</label>
-            <input
-              className="input" type="text" value={deleteConfirmText}
+            <input className="input" type="text" value={deleteConfirmText}
               onChange={e => setDeleteConfirmText(e.target.value)}
               placeholder="DELETE" autoFocus
-              onKeyDown={e => e.key === 'Enter' && deleteCurrent()}
-            />
+              onKeyDown={e => e.key === 'Enter' && deleteCurrent()} />
           </div>
           <div className="dialog__actions">
             <button className="btn btn--ghost btn--sm" onClick={() => { setPendingDeleteId(null); setDeleteConfirmText(''); }}>Cancel</button>
@@ -282,8 +230,8 @@ export default function SubscriptionPanel({ onBackToHub }) {
   </>;
 }
 
-// ── List Panel ─────────────────────────────────────────────────────────────────
-function SubsListPanel({ search, setSearch, filtered, openForm, openView, setPendingDeleteId }) {
+// ── List Panel ────────────────────────────────────────────────────────────────
+function SubsListPanel({ search, setSearch, filtered, total, openForm, openView, setPendingDeleteId, onSync }) {
   return (
     <div id="list-panel">
       <div className="toolbar">
@@ -292,51 +240,51 @@ function SubsListPanel({ search, setSearch, filtered, openForm, openView, setPen
           <input className="search-input" type="search" placeholder="Search tiers…"
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <button className="btn btn--primary" onClick={() => openForm(null)}>+ Add Tier</button>
+        <button className="btn btn--ghost btn--sm" onClick={onSync} title="Sync from Sheet">
+          <i className="fa-solid fa-rotate" /> Sync
+        </button>
       </div>
 
       <div className="table-wrap">
         <table>
           <thead><tr>
-            <th>Image</th>
-            <th style={{width:'25%'}}>Tier</th>
-            <th>Eyebrow</th>
+            <th style={{width:64}}>Image</th>
+            <th>Tier</th>
+            <th>Eyebrow (EN)</th>
             <th>Short Description</th>
-            <th>Pricing</th>
+            <th>Prices</th>
             <th style={{width:116}}>Actions</th>
           </tr></thead>
           <tbody>
             {filtered.map(s => (
               <tr key={s.id} className="tr--clickable" onClick={() => openView(s.id)}>
-                <td style={{width:64}}>
-                  <div style={{width:52,height:52,borderRadius:8,overflow:'hidden',background:'var(--surface-2)'}}>
-                    <img
-                      src={toImageUrl(s.image)}
-                      alt={s.title}
+                <td>
+                  <div style={{width:48,height:48,borderRadius:8,overflow:'hidden',background:'var(--surface-2)',flexShrink:0}}>
+                    <img src={toImageUrl(s.image)} alt={s.title}
                       style={{width:'100%',height:'100%',objectFit:'cover'}}
-                      onError={e => { e.currentTarget.style.display='none'; }}
-                    />
+                      onError={e => { e.currentTarget.style.display='none'; }} />
                   </div>
                 </td>
-                <td>
-                  <div className="td-name">{s.title || '—'}</div>
-                  {s.eyebrowEN && <div className="td-sub">{s.eyebrowEN}</div>}
-                </td>
+                <td><div className="td-name">{s.title || '—'}</div></td>
                 <td style={{color:'var(--muted)',fontSize:'0.8rem'}}>{s.eyebrowEN || '—'}</td>
-                <td style={{color:'var(--muted)',fontSize:'0.8rem',maxWidth:220}}>
+                <td style={{color:'var(--muted)',fontSize:'0.8rem',maxWidth:200}}>
                   <div style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.shortDescEN || '—'}</div>
                 </td>
                 <td>
                   <div className="size-chips">
+                    {s.price200g && <span className="size-chip">200g €{s.price200g}</span>}
                     {s.price250g && <span className="size-chip">250g €{s.price250g}</span>}
                     {s.price500g && <span className="size-chip">500g €{s.price500g}</span>}
                     {s.price1kg  && <span className="size-chip">1kg €{s.price1kg}</span>}
-                    {!s.price250g && !s.price500g && !s.price1kg && '—'}
+                    {!s.price200g && !s.price250g && !s.price500g && !s.price1kg && '—'}
                   </div>
                 </td>
                 <td><div className="td-actions" onClick={e => e.stopPropagation()}>
                   <button className="btn btn--ghost btn--sm btn--icon" onClick={() => openView(s.id)} title="View">👁️</button>
                   <button className="btn btn--ghost btn--sm btn--icon" onClick={() => openForm(s.id)} title="Edit">✏️</button>
-                  <button className="btn btn--ghost btn--sm btn--icon" onClick={() => setPendingDeleteId(s.id)} title="Delete" style={{color:'var(--red)'}}>🗑️</button>
+                  <button className="btn btn--ghost btn--sm btn--icon" style={{color:'var(--red)'}}
+                    onClick={() => setPendingDeleteId(s.id)} title="Delete">🗑️</button>
                 </div></td>
               </tr>
             ))}
@@ -346,7 +294,7 @@ function SubsListPanel({ search, setSearch, filtered, openForm, openView, setPen
           <div className="empty-state">
             <div className="empty-state__icon">🦆</div>
             <div className="empty-state__title">No subscription tiers yet</div>
-            <div className="empty-state__text">Click "+ Add Tier" to create the first one.</div>
+            <div className="empty-state__text">Click "+ Add Tier" to create the first one, or Sync to pull from the sheet.</div>
           </div>
         )}
       </div>
@@ -354,7 +302,7 @@ function SubsListPanel({ search, setSearch, filtered, openForm, openView, setPen
   );
 }
 
-// ── View Panel ─────────────────────────────────────────────────────────────────
+// ── View Panel ────────────────────────────────────────────────────────────────
 function SubsViewPanel({ sub, onBack, onEdit }) {
   if (!sub) return (
     <div className="view-panel">
@@ -379,12 +327,11 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
     <div className="view-panel">
       <div className="form-header">
         <button className="form-header__back" onClick={onBack}>← Back</button>
-        <h1 className="form-header__title">{sub.title || 'Untitled'}</h1>
+        <h1 className="form-header__title">{sub.title || 'Untitled tier'}</h1>
         <button className="btn btn--ghost btn--sm" style={{marginLeft:'auto'}} onClick={() => onEdit(sub.id)}>✏️ Edit</button>
       </div>
 
       <div className="form-grid">
-
         {/* ── LEFT ── */}
         <div>
           {/* Image */}
@@ -392,11 +339,8 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
             <div className="card__header"><span className="card__icon">🖼️</span><span className="card__title">Tier Image</span></div>
             <div className="card__body" style={{padding:0}}>
               <div className="view-img-wrap">
-                <img
-                  src={toImageUrl(sub.image)}
-                  alt={sub.title}
-                  onError={e => { e.currentTarget.style.display='none'; }}
-                />
+                <img src={toImageUrl(sub.image)} alt={sub.title}
+                  onError={e => { e.currentTarget.style.display='none'; }} />
               </div>
             </div>
           </div>
@@ -405,7 +349,7 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
           <div className="card">
             <div className="card__header"><span className="card__icon">🇨🇦</span><span className="card__title">Content — English</span></div>
             <div className="card__body">
-              <VF label="Eyebrow" value={sub.eyebrowEN} />
+              <VF label="Eyebrow"           value={sub.eyebrowEN} />
               <VF label="Short Description" value={sub.shortDescEN} />
               {sub.longDescEN && (
                 <div className="view-field">
@@ -414,14 +358,9 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
                     dangerouslySetInnerHTML={{__html: renderMarkdown(sub.longDescEN)}} />
                 </div>
               )}
-              <div style={{marginTop:12}}>
-                {[sub.feat01EN,sub.feat02EN,sub.feat03EN,sub.feat04EN].filter(Boolean).map((f,i) => (
-                  <div key={i} className="view-field">
-                    <span className="view-field-label">Feature {i+1}</span>
-                    <span className="view-field-value">{f}</span>
-                  </div>
-                ))}
-              </div>
+              {[sub.feat01EN,sub.feat02EN,sub.feat03EN,sub.feat04EN].filter(Boolean).map((f,i) => (
+                <VF key={i} label={`Feature ${i+1}`} value={f} />
+              ))}
             </div>
           </div>
 
@@ -446,19 +385,23 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
             <div className="card__header"><span className="card__icon">💶</span><span className="card__title">Pricing & Links</span></div>
             <div className="card__body">
               <div className="pricing-table">
-                <div className="pricing-table-header">
-                  <span>Size</span><span>Price €</span><span>Link</span>
+                <div className="pricing-table-header" style={{gridTemplateColumns:'70px 1fr 1fr 1fr'}}>
+                  <span>Size</span><span>Cost €</span><span>Price €</span><span>Link</span>
                 </div>
-                {SIZES.map(({ key, label }) => {
+                {ALL_SIZES.map(({ key, label }) => {
+                  const cost  = sub[`cost${key}`];
                   const price = sub[`price${key}`];
                   const link  = sub[`link${key}`];
-                  if (!price && !link) return null;
+                  if (!cost && !price && !link) return null;
                   return (
-                    <div className="pricing-row" key={key} style={{gridTemplateColumns:'80px 1fr 2fr'}}>
+                    <div className="pricing-row" key={key} style={{gridTemplateColumns:'70px 1fr 1fr 1fr'}}>
                       <span className="pricing-size">{label}</span>
+                      <span className="pricing-ro">{cost  ? `€${cost}`  : '—'}</span>
                       <span className="pricing-ro">{price ? `€${price}` : '—'}</span>
-                      <span style={{fontSize:'0.75rem',color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                        {link ? <a href={link} target="_blank" rel="noreferrer" style={{color:'var(--accent)'}}>🔗 Open</a> : '—'}
+                      <span style={{fontSize:'0.75rem'}}>
+                        {link
+                          ? <a href={link} target="_blank" rel="noreferrer" style={{color:'var(--accent)'}}>🔗 Open</a>
+                          : '—'}
                       </span>
                     </div>
                   );
@@ -471,7 +414,7 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
           <div className="card">
             <div className="card__header"><span className="card__icon">🇪🇸</span><span className="card__title">Content — Español</span></div>
             <div className="card__body">
-              <VF label="Eyebrow" value={sub.eyebrowES} />
+              <VF label="Eyebrow"           value={sub.eyebrowES} />
               <VF label="Short Description" value={sub.shortDescES} />
               {sub.longDescES && (
                 <div className="view-field">
@@ -480,14 +423,9 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
                     dangerouslySetInnerHTML={{__html: renderMarkdown(sub.longDescES)}} />
                 </div>
               )}
-              <div style={{marginTop:12}}>
-                {[sub.feat01ES,sub.feat02ES,sub.feat03ES,sub.feat04ES].filter(Boolean).map((f,i) => (
-                  <div key={i} className="view-field">
-                    <span className="view-field-label">Feature {i+1}</span>
-                    <span className="view-field-value">{f}</span>
-                  </div>
-                ))}
-              </div>
+              {[sub.feat01ES,sub.feat02ES,sub.feat03ES,sub.feat04ES].filter(Boolean).map((f,i) => (
+                <VF key={i} label={`Feature ${i+1}`} value={f} />
+              ))}
             </div>
           </div>
 
@@ -504,13 +442,12 @@ function SubsViewPanel({ sub, onBack, onEdit }) {
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );
 }
 
-// ── Form Panel ─────────────────────────────────────────────────────────────────
+// ── Form Panel ────────────────────────────────────────────────────────────────
 function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPendingDeleteId, onImageUpload }) {
   return (
     <div id="form-panel" className="form-panel active">
@@ -524,7 +461,6 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
 
           {/* ── LEFT COLUMN ── */}
           <div>
-            {/* Identity */}
             <Card icon="✏️" title="Tier Identity">
               <Field label="Tier Title" required>
                 <input className="input" required value={form.title}
@@ -533,7 +469,6 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
               </Field>
             </Card>
 
-            {/* Content EN */}
             <Card icon="🇨🇦" title="Content — English">
               <Field label="Eyebrow">
                 <input className="input" value={form.eyebrowEN}
@@ -545,44 +480,27 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
                   onChange={e => updateField('shortDescEN', e.target.value)}
                   placeholder="One-liner shown in listings" />
               </Field>
-              <MarkdownField
-                label="Long Description"
-                value={form.longDescEN}
-                onChange={v => updateField('longDescEN', v)}
-                placeholder="Full marketing copy (supports **bold**, *italic*, # headings, - lists)"
-              />
+              <MarkdownField label="Long Description"
+                value={form.longDescEN} onChange={v => updateField('longDescEN', v)}
+                placeholder="Full marketing copy — **bold**, *italic*, # heading, - list" />
               <div className="field-row" style={{gridTemplateColumns:'1fr 1fr'}}>
-                {['feat01EN','feat02EN','feat03EN','feat04EN'].map((key, i) => (
+                {['feat01EN','feat02EN','feat03EN','feat04EN'].map((key,i) => (
                   <Field key={key} label={`Feature ${i+1}`}>
                     <input className="input" value={form[key]}
-                      onChange={e => updateField(key, e.target.value)}
-                      placeholder={`Feature ${i+1}`} />
+                      onChange={e => updateField(key, e.target.value)} placeholder={`Feature ${i+1}`} />
                   </Field>
                 ))}
               </div>
             </Card>
 
-            {/* Coffee Profile EN */}
             <Card icon="☕" title="Coffee Profile — English">
               <div className="field-row">
-                <Field label="Composition">
-                  <input className="input" value={form.compositionEN}
-                    onChange={e => updateField('compositionEN', e.target.value)} />
-                </Field>
-                <Field label="Flavor">
-                  <input className="input" value={form.flavorEN}
-                    onChange={e => updateField('flavorEN', e.target.value)} />
-                </Field>
+                <Field label="Composition"><input className="input" value={form.compositionEN} onChange={e => updateField('compositionEN', e.target.value)} /></Field>
+                <Field label="Flavor">     <input className="input" value={form.flavorEN}      onChange={e => updateField('flavorEN',      e.target.value)} /></Field>
               </div>
               <div className="field-row">
-                <Field label="Structure">
-                  <input className="input" value={form.structureEN}
-                    onChange={e => updateField('structureEN', e.target.value)} />
-                </Field>
-                <Field label="Purpose">
-                  <input className="input" value={form.purposeEN}
-                    onChange={e => updateField('purposeEN', e.target.value)} />
-                </Field>
+                <Field label="Structure">  <input className="input" value={form.structureEN}   onChange={e => updateField('structureEN',   e.target.value)} /></Field>
+                <Field label="Purpose">    <input className="input" value={form.purposeEN}     onChange={e => updateField('purposeEN',     e.target.value)} /></Field>
               </div>
             </Card>
           </div>
@@ -596,8 +514,7 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
                   ? <img src={toImageUrl(form.image)} alt="Preview"
                       onError={e => { e.currentTarget.style.display='none'; }} />
                   : <div className="img-preview__empty">
-                      <div className="img-preview__empty-icon">🦆</div>
-                      <span>No image set</span>
+                      <div className="img-preview__empty-icon">🦆</div><span>No image set</span>
                     </div>
                 }
               </div>
@@ -606,32 +523,38 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
                   📁 Upload image
                   <input type="file" accept="image/*" style={{display:'none'}} onChange={onImageUpload} />
                 </label>
-                <button type="button" className="btn btn--ghost btn--sm"
-                  onClick={() => updateField('image', '')}>Clear</button>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => updateField('image','')}>Clear</button>
               </div>
               <Field label="Google Drive URL or File ID">
                 <input className="input input--mono" type="text" value={form.image}
                   onChange={e => updateField('image', e.target.value)}
-                  placeholder="Paste a Drive share link, /d/…/view URL, or bare file ID" />
-                <div className="field-hint">Any Drive URL is auto-converted to the correct embed format on preview.</div>
+                  placeholder="Paste a Drive share link or bare file ID…" />
+                <div className="field-hint">Any Drive URL is auto-converted to the correct embed format.</div>
               </Field>
             </Card>
 
-            {/* Pricing & Links */}
+            {/* Pricing */}
             <Card icon="💶" title="Pricing & Links">
-              {SIZES.map(({ key, label }) => (
-                <div key={key} style={{marginBottom:16}}>
-                  <div style={{fontSize:'0.75rem',fontWeight:600,color:'var(--muted)',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.05em'}}>{label}</div>
-                  <div className="field-row">
+              <div className="field-hint" style={{marginBottom:12}}>
+                200g = Summit only &nbsp;·&nbsp; 250g / 500g / 1kg = Base, Explorer, Alpine
+              </div>
+              {ALL_SIZES.map(({ key, label, hint }) => (
+                <div key={key} style={{marginBottom:20}}>
+                  <div style={{fontSize:'0.72rem',fontWeight:600,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:6}}>
+                    {label} <span style={{fontWeight:400,textTransform:'none'}}>— {hint}</span>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 2fr',gap:8}}>
+                    <Field label="Cost (€)">
+                      <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
+                        value={form[`cost${key}`]} onChange={e => updateField(`cost${key}`, e.target.value)} />
+                    </Field>
                     <Field label="Price (€)">
                       <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
-                        value={form[`price${key}`]}
-                        onChange={e => updateField(`price${key}`, e.target.value)} />
+                        value={form[`price${key}`]} onChange={e => updateField(`price${key}`, e.target.value)} />
                     </Field>
                     <Field label="Buy Link">
                       <input className="input" type="url" placeholder="https://…"
-                        value={form[`link${key}`]}
-                        onChange={e => updateField(`link${key}`, e.target.value)} />
+                        value={form[`link${key}`]} onChange={e => updateField(`link${key}`, e.target.value)} />
                     </Field>
                   </div>
                 </div>
@@ -641,24 +564,18 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
             {/* Content ES */}
             <Card icon="🇪🇸" title="Content — Español">
               <Field label="Eyebrow">
-                <input className="input" value={form.eyebrowES}
-                  onChange={e => updateField('eyebrowES', e.target.value)} />
+                <input className="input" value={form.eyebrowES} onChange={e => updateField('eyebrowES', e.target.value)} />
               </Field>
               <Field label="Short Description">
-                <input className="input" value={form.shortDescES}
-                  onChange={e => updateField('shortDescES', e.target.value)} />
+                <input className="input" value={form.shortDescES} onChange={e => updateField('shortDescES', e.target.value)} />
               </Field>
-              <MarkdownField
-                label="Long Description"
-                value={form.longDescES}
-                onChange={v => updateField('longDescES', v)}
-                placeholder="Descripción larga en español…"
-              />
+              <MarkdownField label="Long Description"
+                value={form.longDescES} onChange={v => updateField('longDescES', v)}
+                placeholder="Descripción larga en español…" />
               <div className="field-row" style={{gridTemplateColumns:'1fr 1fr'}}>
-                {['feat01ES','feat02ES','feat03ES','feat04ES'].map((key, i) => (
+                {['feat01ES','feat02ES','feat03ES','feat04ES'].map((key,i) => (
                   <Field key={key} label={`Feature ${i+1}`}>
-                    <input className="input" value={form[key]}
-                      onChange={e => updateField(key, e.target.value)} />
+                    <input className="input" value={form[key]} onChange={e => updateField(key, e.target.value)} />
                   </Field>
                 ))}
               </div>
@@ -667,36 +584,21 @@ function SubsFormPanel({ form, updateField, saveSub, closeForm, currentId, setPe
             {/* Coffee Profile ES */}
             <Card icon="☕" title="Coffee Profile — Español">
               <div className="field-row">
-                <Field label="Composition">
-                  <input className="input" value={form.compositionES}
-                    onChange={e => updateField('compositionES', e.target.value)} />
-                </Field>
-                <Field label="Flavor">
-                  <input className="input" value={form.flavorES}
-                    onChange={e => updateField('flavorES', e.target.value)} />
-                </Field>
+                <Field label="Composition"><input className="input" value={form.compositionES} onChange={e => updateField('compositionES', e.target.value)} /></Field>
+                <Field label="Flavor">     <input className="input" value={form.flavorES}      onChange={e => updateField('flavorES',      e.target.value)} /></Field>
               </div>
               <div className="field-row">
-                <Field label="Structure">
-                  <input className="input" value={form.structureES}
-                    onChange={e => updateField('structureES', e.target.value)} />
-                </Field>
-                <Field label="Purpose">
-                  <input className="input" value={form.purposeES}
-                    onChange={e => updateField('purposeES', e.target.value)} />
-                </Field>
+                <Field label="Structure">  <input className="input" value={form.structureES}   onChange={e => updateField('structureES',   e.target.value)} /></Field>
+                <Field label="Purpose">    <input className="input" value={form.purposeES}     onChange={e => updateField('purposeES',     e.target.value)} /></Field>
               </div>
             </Card>
           </div>
-
         </div>
 
-        {/* ── Full-width actions ── */}
         <div className="form-actions-row">
           {currentId
             ? <button type="button" className="btn btn--danger btn--sm" onClick={() => setPendingDeleteId(currentId)}>🗑️ Delete</button>
-            : <div />
-          }
+            : <div />}
           <div style={{flex:1}} />
           <button type="button" className="btn btn--ghost btn--sm" onClick={closeForm}>Cancel</button>
           <button type="submit" className="btn btn--primary">Save Tier</button>
@@ -715,7 +617,6 @@ function Card({ icon, title, children }) {
     </div>
   );
 }
-
 function Field({ label, required, children }) {
   return (
     <div className="field">
@@ -724,25 +625,24 @@ function Field({ label, required, children }) {
     </div>
   );
 }
-
-function MarkdownField({ label, value, onChange, placeholder, minHeight = 130 }) {
+function MarkdownField({ label, value, onChange, placeholder, minHeight = 120 }) {
   const [preview, setPreview] = useState(false);
   return (
     <div className="field">
       <div className="md-header">
         <label style={{margin:0}}>{label}</label>
         <div className="md-tabs">
-          <button type="button" className={`md-tab${!preview ? ' md-tab--active' : ''}`} onClick={() => setPreview(false)}>Edit</button>
-          <button type="button" className={`md-tab${preview  ? ' md-tab--active' : ''}`} onClick={() => setPreview(true)}>Preview</button>
+          <button type="button" className={`md-tab${!preview?' md-tab--active':''}`} onClick={() => setPreview(false)}>Edit</button>
+          <button type="button" className={`md-tab${preview?' md-tab--active':''}`}  onClick={() => setPreview(true)}>Preview</button>
         </div>
       </div>
       {preview
         ? <div className="md-preview" style={{minHeight}}
             dangerouslySetInnerHTML={{__html: renderMarkdown(value) || '<p class="md-empty">Nothing to preview</p>'}} />
         : <textarea className="textarea-input" style={{minHeight}}
-            value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+            value={value||''} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
       }
-      <div className="field-hint">**bold** &nbsp;·&nbsp; *italic* &nbsp;·&nbsp; # heading &nbsp;·&nbsp; - list item</div>
+      <div className="field-hint">**bold** · *italic* · # heading · - list</div>
     </div>
   );
 }

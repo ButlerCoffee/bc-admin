@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiCall } from './lib/api.js';
 import LabelsPanel from './LabelsPanel.jsx';
+import SubscriptionPanel from './SubscriptionPanel.jsx';
 import { useAuth } from './AuthContext.jsx';
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
@@ -268,6 +269,7 @@ export default function App({ onBackToHub }) {
 
   const { logout } = useAuth();
   const isCoffeePanel = ['list','view','form'].includes(panel);
+  const isSubsPanel   = panel === 'subs';
   const sc = sidebarCollapsed;
 
   return <>
@@ -291,6 +293,14 @@ export default function App({ onBackToHub }) {
           >
             <span className="nav-link__icon"><i className="fa-solid fa-mug-hot" /></span>
             {!sc && <><span>Coffee</span><span className="nav-link__badge">{coffees.length}</span></>}
+          </button>
+          <button
+            className={`nav-link${panel === 'subs' ? ' active' : ''}`}
+            onClick={() => setPanel('subs')}
+            title="Subscriptions"
+          >
+            <span className="nav-link__icon"><i className="fa-solid fa-layer-group" /></span>
+            {!sc && <span>Subscriptions</span>}
           </button>
           <button className="nav-link nav-link--soon" title="Coming soon">
             <span className="nav-link__icon"><i className="fa-solid fa-gears" /></span>
@@ -352,8 +362,9 @@ export default function App({ onBackToHub }) {
       <div className="topbar">
         <div className="topbar__left">
           <span className="topbar__title">
-            {panel === 'home' ? 'Butler Coffee'
+            {panel === 'home'   ? 'Butler Coffee'
               : panel === 'labels' ? 'Label Generator'
+              : panel === 'subs'   ? 'Subscriptions'
               : 'Coffee'}
           </span>
           {isCoffeePanel && <span className="topbar__count">{coffees.length} entr{coffees.length === 1 ? 'y' : 'ies'}</span>}
@@ -367,6 +378,8 @@ export default function App({ onBackToHub }) {
           ? <HomePanel setPanel={setPanel} />
           : panel === 'labels'
           ? <LabelsPanel coffees={coffees} />
+          : panel === 'subs'
+          ? <SubscriptionPanel />
           : panel === 'list'
           ? <ListPanel {...{ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, originFilter, setOriginFilter, visibilityFilter, setVisibilityFilter, filtered, openForm, openView, setPendingDeleteId }} />
           : panel === 'view'
@@ -416,6 +429,13 @@ function HomePanel({ setPanel }) {
       icon: 'fa-tag',
       title: 'Labels',
       description: 'Generate bag labels for any roast',
+      soon: false,
+    },
+    {
+      id: 'subs',
+      icon: 'fa-layer-group',
+      title: 'Subscriptions',
+      description: 'Subscription tiers, pricing & buy links',
       soon: false,
     },
     {

@@ -11,7 +11,7 @@
  *
  * ROUTING:
  *  GET  /exec             → Coffee sheet
- *  GET  /exec?sheet=subs  → Subcription sheet
+ *  GET  /exec?sheet=subs  → Subscription sheet
  *  POST /exec             → Coffee (body.sheet undefined)
  *  POST /exec             → Subs   (body.sheet === 'subs')
  */
@@ -74,8 +74,14 @@ const TOTAL_COLS = 52; // columns A–AZ
 
 /** Pad a row array to the required length */
 function ensureRowLength(row, len) {
+  if (!Array.isArray(row)) row = [];          // guard against GAS spread quirks
   while (row.length < len) row.push('');
   return row;
+}
+
+/** Safe row copy — GAS-compatible alternative to the spread operator */
+function copyRow(row) {
+  return Array.isArray(row) ? row.slice() : [];
 }
 
 /** Strip currency symbols / spaces and return a plain numeric string, or '' */
@@ -286,7 +292,7 @@ function handleSave(coffee) {
     if (String(data[i][C.ID]) === String(coffee.id)) {
       // Update in place — only overwrite app-managed columns
       const sheetRow = i + 1; // 1-based for Range
-      const updatedRow = applyToRow(ensureRowLength([...data[i]], TOTAL_COLS), coffee);
+      const updatedRow = applyToRow(ensureRowLength(copyRow(data[i]), TOTAL_COLS), coffee);
       sheet.getRange(sheetRow, 1, 1, TOTAL_COLS).setValues([updatedRow]);
       return jsonOut({ ok: true, data: rowToApp(updatedRow) });
     }
@@ -380,16 +386,15 @@ function handleImport(coffees) {
 // ─── SUBSCRIPTION SHEET ───────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const SHEET_NAME_SUBS = 'Subcription'; // exact tab name (note: typo is intentional — matches the sheet)
+const SHEET_NAME_SUBS = 'Subscription'; // exact tab name (note: typo is intentional — matches the sheet)
 
-// Column indices (0-based) for the Subcription sheet
-// Columns A–AD (0–29) come from the sheet headers you defined.
-// Column AE (30) is "image" — add this column to your sheet.
+// Column indices (0-based) — match the row-1 headers in your Subscription sheet exactly.
+// Columns A–AJ (0–35) are your defined headers; AK (36) = "image" (add to sheet).
 const SC = {
   ID:             0,
   TITLE:          1,
   EYEBROW_EN:     2,
-  SHORT_DESC_EN:  3,
+  SHORT_DESC_EN:  3,   // sheet header: shortDescEn
   LONG_DESC_EN:   4,
   FEAT01_EN:      5,
   FEAT02_EN:      6,
@@ -410,16 +415,22 @@ const SC = {
   FLAVOR_ES:      21,
   STRUCTURE_ES:   22,
   PURPOSE_ES:     23,
-  PRICE_250G:     24,
-  PRICE_500G:     25,
-  PRICE_1KG:      26,
-  LINK_250G:      27,
-  LINK_500G:      28,
-  LINK_1KG:       29,
-  IMAGE:          30   // add column "image" (AE) to your sheet
+  COST_200G:      24,  // 200gCost
+  COST_250G:      25,  // 250gCost
+  COST_500G:      26,  // 500gCost
+  COST_1KG:       27,  // 1kgCost
+  PRICE_200G:     28,  // 200gPrice
+  PRICE_250G:     29,  // 250gPrice
+  PRICE_500G:     30,  // 500gPrice
+  PRICE_1KG:      31,  // 1kgPrice
+  LINK_200G:      32,  // 200gLink
+  LINK_250G:      33,  // 250gLink
+  LINK_500G:      34,  // 500gLink
+  LINK_1KG:       35,  // 1kgLink
+  IMAGE:          36   // add header "image" (column AK) to your sheet
 };
 
-const TOTAL_COLS_SUBS = 31;
+const TOTAL_COLS_SUBS = 37;
 
 function getSheetSubs() {
   return SpreadsheetApp.openById(SS_ID).getSheetByName(SHEET_NAME_SUBS);
@@ -451,9 +462,15 @@ function rowToAppSub(row) {
     flavorES:      String(row[SC.FLAVOR_ES]      || ''),
     structureES:   String(row[SC.STRUCTURE_ES]   || ''),
     purposeES:     String(row[SC.PURPOSE_ES]     || ''),
+    cost200g:      parseMoney(row[SC.COST_200G]),
+    cost250g:      parseMoney(row[SC.COST_250G]),
+    cost500g:      parseMoney(row[SC.COST_500G]),
+    cost1kg:       parseMoney(row[SC.COST_1KG]),
+    price200g:     parseMoney(row[SC.PRICE_200G]),
     price250g:     parseMoney(row[SC.PRICE_250G]),
     price500g:     parseMoney(row[SC.PRICE_500G]),
     price1kg:      parseMoney(row[SC.PRICE_1KG]),
+    link200g:      String(row[SC.LINK_200G]      || ''),
     link250g:      String(row[SC.LINK_250G]      || ''),
     link500g:      String(row[SC.LINK_500G]      || ''),
     link1kg:       String(row[SC.LINK_1KG]       || ''),
@@ -486,13 +503,20 @@ function applyToRowSub(row, sub) {
   row[SC.FLAVOR_ES]      = sub.flavorES       || '';
   row[SC.STRUCTURE_ES]   = sub.structureES    || '';
   row[SC.PURPOSE_ES]     = sub.purposeES      || '';
-  if (sub.price250g !== undefined) row[SC.PRICE_250G] = sub.price250g === '' ? '' : Number(sub.price250g) || '';
-  if (sub.price500g !== undefined) row[SC.PRICE_500G] = sub.price500g === '' ? '' : Number(sub.price500g) || '';
-  if (sub.price1kg  !== undefined) row[SC.PRICE_1KG]  = sub.price1kg  === '' ? '' : Number(sub.price1kg)  || '';
-  row[SC.LINK_250G]      = sub.link250g       || '';
-  row[SC.LINK_500G]      = sub.link500g       || '';
-  row[SC.LINK_1KG]       = sub.link1kg        || '';
-  row[SC.IMAGE]          = sub.image          || '';
+  function pm(v) { return v === undefined || v === '' ? '' : Number(v) || ''; }
+  row[SC.COST_200G]  = pm(sub.cost200g);
+  row[SC.COST_250G]  = pm(sub.cost250g);
+  row[SC.COST_500G]  = pm(sub.cost500g);
+  row[SC.COST_1KG]   = pm(sub.cost1kg);
+  row[SC.PRICE_200G] = pm(sub.price200g);
+  row[SC.PRICE_250G] = pm(sub.price250g);
+  row[SC.PRICE_500G] = pm(sub.price500g);
+  row[SC.PRICE_1KG]  = pm(sub.price1kg);
+  row[SC.LINK_200G]  = sub.link200g  || '';
+  row[SC.LINK_250G]  = sub.link250g  || '';
+  row[SC.LINK_500G]  = sub.link500g  || '';
+  row[SC.LINK_1KG]   = sub.link1kg   || '';
+  row[SC.IMAGE]      = sub.image     || '';
   return row;
 }
 
@@ -521,7 +545,7 @@ function handleSaveSub(sub) {
   for (let i = 2; i < data.length; i++) {
     if (String(data[i][SC.ID]) === String(sub.id)) {
       const sheetRow   = i + 1;
-      const updatedRow = applyToRowSub(ensureRowLength([...data[i]], TOTAL_COLS_SUBS), sub);
+      const updatedRow = applyToRowSub(ensureRowLength(copyRow(data[i]), TOTAL_COLS_SUBS), sub);
       sheet.getRange(sheetRow, 1, 1, TOTAL_COLS_SUBS).setValues([updatedRow]);
       return jsonOut({ ok: true, data: rowToAppSub(updatedRow) });
     }
