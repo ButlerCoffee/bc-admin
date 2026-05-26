@@ -20,6 +20,8 @@ import {
 import MachinesPanel      from './MachinesPanel.jsx';
 import SubscriptionPanel  from './SubscriptionPanel.jsx';
 import LabelsPanel        from './LabelsPanel.jsx';
+import BlogIndex          from './pages/BlogIndex.jsx';
+import BlogPost           from './pages/BlogPost.jsx';
 import { CoffeeProvider } from './CoffeeContext.jsx';
 
 // ── Auth guard — redirects to login if not authenticated ──────────────────────
@@ -134,17 +136,6 @@ function RootLayout() {
   );
 }
 
-// ── Placeholder for coming-soon routes ───────────────────────────────────────
-function ComingSoon({ title }) {
-  return (
-    <div className="empty-state" style={{ padding:'60px 24px' }}>
-      <div className="empty-state__icon">🚧</div>
-      <div className="empty-state__title">{title}</div>
-      <div className="empty-state__text">This section is coming soon.</div>
-    </div>
-  );
-}
-
 // ── Route tree ────────────────────────────────────────────────────────────────
 const router = createBrowserRouter([
   {
@@ -175,8 +166,9 @@ const router = createBrowserRouter([
           { path: 'subscription/*', element: <SubscriptionPanel /> },
 
           // Other
-          { path: 'labels', element: <LabelsPanel /> },
-          { path: 'blog',   element: <ComingSoon title="Blog" /> },
+          { path: 'labels',      element: <LabelsPanel /> },
+          { path: 'blog',        element: <BlogIndex /> },
+          { path: 'blog/:slug',  element: <BlogPost /> },
         ],
       },
 

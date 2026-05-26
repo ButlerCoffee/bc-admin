@@ -173,10 +173,10 @@ export default function App() {
               <span className="nav-link__icon"><i className="fa-solid fa-gears" /></span>
               {!sc && <span>Machines</span>}
             </NavLink>
-            <span className="nav-link nav-link--soon" title="Coming soon">
+            <NavLink to="/butlercoffee/blog" className={navClass} title="Blog">
               <span className="nav-link__icon"><i className="fa-solid fa-pen-nib" /></span>
-              {!sc && <><span>Blog</span><span className="nav-link__badge">soon</span></>}
-            </span>
+              {!sc && <span>Blog</span>}
+            </NavLink>
           </div>
 
           <div className="nav-section">
@@ -257,6 +257,8 @@ function TopbarTitle() {
     return <span className="topbar__title">Subscription Levels</span>;
   if (p.startsWith('/butlercoffee/labels'))
     return <span className="topbar__title">Label Generator</span>;
+  if (p.startsWith('/butlercoffee/blog'))
+    return <span className="topbar__title">Blog</span>;
   return <span className="topbar__title">Butler Coffee</span>;
 }
 
@@ -279,7 +281,7 @@ export function HomePanel() {
     { id: 'labels',       icon: 'fa-tag',          title: 'Labels',             description: 'Generate bag labels for any roast',           soon: false },
     { id: 'subscription', icon: 'fa-layer-group',  title: 'Subscription Levels',description: 'Tier content, pricing & buy links',           soon: false },
     { id: 'machines',     icon: 'fa-gears',        title: 'Machines',           description: 'Equipment catalogue & pricing',               soon: false },
-    { id: 'blog',         icon: 'fa-pen-nib',      title: 'Blog',               description: 'Articles and content',                        soon: true  },
+    { id: 'blog',         icon: 'fa-pen-nib',      title: 'Blog',               description: 'Articles and guides from the team',           soon: false },
   ];
   return (
     <div className="home-panel">
