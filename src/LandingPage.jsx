@@ -10,17 +10,10 @@ const APPS = [
     status:   'active',
   },
   {
-    id:       'machines',
-    icon:     'fa-gears',
-    name:     'Machines',
-    desc:     'Equipment inventory and maintenance tracking',
-    status:   'soon',
-  },
-  {
-    id:       'blog',
-    icon:     'fa-pen-nib',
-    name:     'Blog',
-    desc:     'Content management for butler.coffee',
+    id:       'appdev',
+    icon:     'fa-code',
+    name:     'App Development',
+    desc:     'Internal tools and custom app projects',
     status:   'soon',
   },
 ];

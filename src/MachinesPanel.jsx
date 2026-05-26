@@ -358,8 +358,12 @@ export default function MachinesPanel() {
               <option value="">All categories</option>
               {categories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <button className="btn btn--ghost btn--sm" onClick={() => pullFromSheet(true)} title="Pull from Sheet">↓ Pull</button>
-            <button className="btn btn--ghost btn--sm" onClick={pushToSheet} title="Push to Sheet">↑ Push</button>
+            <button className="btn btn--ghost btn--sm" onClick={() => pullFromSheet(true)} title="Pull from Sheet">
+              <i className="fa-solid fa-cloud-arrow-down" style={{ marginRight:5 }} />Pull
+            </button>
+            <button className="btn btn--ghost btn--sm" onClick={pushToSheet} title="Push to Sheet">
+              <i className="fa-solid fa-cloud-arrow-up" style={{ marginRight:5 }} />Push
+            </button>
             <a
               href="https://drive.google.com/drive/folders/1Ek32YHfrAmUryNTp4oz7Sz02tE4Jerz5"
               target="_blank" rel="noreferrer"
@@ -373,12 +377,10 @@ export default function MachinesPanel() {
           <div className="table-wrap">
             <table>
               <thead><tr>
-                <th style={{ width:'30%' }}>Machine</th>
-                <th>Category</th>
-                <th>Model</th>
-                <th style={{ textAlign:'right' }}>PVPr</th>
+                <th style={{ width:'40%' }}>Machine</th>
                 <th style={{ textAlign:'right' }}>Sale</th>
-                <th style={{ width:32 }}>✦</th>
+                <th style={{ width:32, textAlign:'center' }}>★</th>
+                <th style={{ width:50, textAlign:'center' }}>Buy</th>
                 <th style={{ width:116 }}>Actions</th>
               </tr></thead>
               <tbody>
@@ -397,20 +399,22 @@ export default function MachinesPanel() {
                           <div>
                             <div className="td-name" style={{ fontWeight:600 }}>{m.brand} {m.name}</div>
                             {m.subtitleEN && <div className="td-sub">{m.subtitleEN}</div>}
+                            {!m.visible && <span className="hidden-badge">HIDDEN</span>}
                           </div>
                         </div>
-                      </td>
-                      <td style={{ color:'var(--muted)', fontSize:'0.8rem' }}>{m.category || '—'}</td>
-                      <td style={{ color:'var(--muted)', fontSize:'0.8rem' }}>{m.model || '—'}</td>
-                      <td style={{ textAlign:'right', fontFamily:'monospace', fontSize:'0.82rem' }}>
-                        {m.pvpr ? `€${parseFloat(m.pvpr).toFixed(2)}` : '—'}
                       </td>
                       <td style={{ textAlign:'right', fontFamily:'monospace', fontSize:'0.82rem', fontWeight:600 }}>
                         {m.salePrice ? `€${parseFloat(m.salePrice).toFixed(2)}` : '—'}
                       </td>
-                      <td style={{ textAlign:'center', fontSize:'0.85rem' }}>
+                      <td style={{ textAlign:'center', fontSize:'0.9rem', color:'var(--accent)' }}>
                         {m.featured ? '★' : ''}
-                        {!m.visible ? <span className="hidden-badge" style={{ marginLeft:2 }}>H</span> : ''}
+                      </td>
+                      <td style={{ textAlign:'center' }} onClick={e => e.stopPropagation()}>
+                        {m.stripeLink
+                          ? <a href={m.stripeLink} target="_blank" rel="noreferrer"
+                              className="btn btn--ghost btn--sm btn--icon" title="Buy on Stripe">🛒</a>
+                          : <span style={{ color:'var(--muted)', fontSize:'0.75rem' }}>—</span>
+                        }
                       </td>
                       <td>
                         <div className="td-actions" onClick={e => e.stopPropagation()}>
@@ -534,22 +538,20 @@ export default function MachinesPanel() {
               {/* Pricing */}
               <Card icon="💶" title="Pricing">
                 <div className="pricing-table">
-                  <div className="pricing-table-header">
-                    <span>Type</span><span>Cost €</span><span>Sale €</span><span>Profit</span><span>Margin</span>
+                  <div className="pricing-table-header" style={{ gridTemplateColumns:'1fr 1fr 1fr 1fr' }}>
+                    <span>Cost €</span><span>Sale €</span><span>Profit</span><span>Margin</span>
                   </div>
                   {(() => {
-                    const cost   = parseFloat(currentMachine.cost);
-                    const sale   = parseFloat(currentMachine.salePrice);
-                    const pvpr   = parseFloat(currentMachine.pvpr);
-                    const m      = calcMargin(cost, sale);
-                    const cls    = m ? marginClass(m.marginPct) : 'margin--none';
+                    const cost = parseFloat(currentMachine.cost);
+                    const sale = parseFloat(currentMachine.salePrice);
+                    const m    = calcMargin(cost, sale);
+                    const cls  = m ? marginClass(m.marginPct) : 'margin--none';
                     return (
-                      <div className="pricing-row">
-                        <span className="pricing-size">Unit</span>
+                      <div className="pricing-row" style={{ gridTemplateColumns:'1fr 1fr 1fr 1fr' }}>
                         <span className="pricing-ro">{!isNaN(cost) ? `€${cost.toFixed(2)}` : '—'}</span>
                         <span className="pricing-ro">{!isNaN(sale) ? `€${sale.toFixed(2)}` : '—'}</span>
                         <span className={`pricing-profit ${cls}`}>{m ? `€${m.marginAmt.toFixed(2)}` : '—'}</span>
-                        <span className={`pricing-margin ${cls}`}>{m ? `${m.marginPct.toFixed(1)}%` : '—'}</span>
+                        <span className={`pricing-margin ${cls}`}>{m ? `${m.marginPct.toFixed(2)}%` : '—'}</span>
                       </div>
                     );
                   })()}
@@ -564,19 +566,19 @@ export default function MachinesPanel() {
                   {currentMachine.vat && (
                     <div className="view-field">
                       <span className="view-field-label">VAT</span>
-                      <span className="view-field-value">{currentMachine.vat}%</span>
+                      <span className="view-field-value">{parseFloat(currentMachine.vat).toFixed(2)}%</span>
                     </div>
                   )}
                   {currentMachine.profit && (
                     <div className="view-field">
                       <span className="view-field-label">Profit (sheet)</span>
-                      <span className="view-field-value">{currentMachine.profit}</span>
+                      <span className="view-field-value">€{parseFloat(currentMachine.profit).toFixed(2)}</span>
                     </div>
                   )}
                   {currentMachine.margin && (
                     <div className="view-field">
                       <span className="view-field-label">Margin (sheet)</span>
-                      <span className="view-field-value">{currentMachine.margin}</span>
+                      <span className="view-field-value">{parseFloat(currentMachine.margin).toFixed(2)}%</span>
                     </div>
                   )}
                 </div>

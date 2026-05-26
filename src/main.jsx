@@ -39,6 +39,15 @@ function MobileNav({ currentApp, setCurrentApp }) {
         </button>
 
         <button
+          className="mobile-nav__item mobile-nav__item--soon"
+          title="Coming soon"
+          disabled
+        >
+          <span className="mobile-nav__icon"><i className="fa-solid fa-code" /></span>
+          <span className="mobile-nav__label">App Dev</span>
+        </button>
+
+        <button
           className={`mobile-nav__item${menuOpen ? ' mobile-nav__item--active' : ''}`}
           onClick={() => setMenuOpen(p => !p)}
         >
@@ -72,6 +81,11 @@ function MobileNav({ currentApp, setCurrentApp }) {
             <button className="mobile-menu__item" onClick={() => { goTo('coffee'); }}>
               <span className="mobile-menu__item-icon"><i className="fa-solid fa-mug-hot" /></span>
               <span>Butler Coffee</span>
+            </button>
+            <button className="mobile-menu__item mobile-menu__item--soon" disabled title="Coming soon">
+              <span className="mobile-menu__item-icon"><i className="fa-solid fa-code" /></span>
+              <span>App Development</span>
+              <span className="nav-link__badge" style={{ marginLeft:'auto' }}>soon</span>
             </button>
             <div className="mobile-menu__divider" />
 
