@@ -978,16 +978,18 @@ function applyToRowBlog(row, post) {
 // ─── Blog Auto-translate (EN → ES via LanguageApp) ────────────────────────────
 
 function doTranslateBlog(body) {
+  var from    = String(body.from    || 'en');
+  var to      = String(body.to      || 'es');
+  var title   = String(body.title   || '');
+  var excerpt = String(body.excerpt || '');
+  var content = String(body.content || '');
   try {
-    var title   = String(body.title   || '');
-    var excerpt = String(body.excerpt || '');
-    var content = String(body.content || '');
     return jsonOut({
       ok: true,
       data: {
-        title_es:   title   ? LanguageApp.translate(title,   'en', 'es') : '',
-        excerpt_es: excerpt ? LanguageApp.translate(excerpt, 'en', 'es') : '',
-        content_es: content ? LanguageApp.translate(content, 'en', 'es') : '',
+        title:   title   ? LanguageApp.translate(title,   from, to) : '',
+        excerpt: excerpt ? LanguageApp.translate(excerpt, from, to) : '',
+        content: content ? LanguageApp.translate(content, from, to) : '',
       }
     });
   } catch(e) {
