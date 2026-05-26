@@ -600,6 +600,7 @@ export default function BlogPanel() {
             <table>
               <thead><tr>
                 <th style={{ width:32 }} />
+                <th style={{ width:56 }} />
                 <th>Title</th>
                 <th style={{ width:120 }}>Category</th>
                 <th style={{ width:110 }}>Status</th>
@@ -612,6 +613,16 @@ export default function BlogPanel() {
                     <td onClick={e => { e.stopPropagation(); quickToggleFeatured(p); }} style={{ textAlign:'center' }} title={p.featured ? 'Featured — click to remove' : 'Click to feature'}>
                       <i className={`fa-${p.featured ? 'solid' : 'regular'} fa-star`}
                         style={{ fontSize:'0.88rem', color: p.featured ? '#f59e0b' : 'var(--border)', cursor:'pointer' }} />
+                    </td>
+                    <td style={{ padding:'6px 4px' }}>
+                      {p.imageUrl
+                        ? <img src={normalizeDriveUrl(p.imageUrl)} alt=""
+                            style={{ width:48, height:48, objectFit:'cover', borderRadius:6, display:'block', border:'1px solid var(--border)' }}
+                            onError={e => { e.target.style.display = 'none'; }} />
+                        : <div style={{ width:48, height:48, borderRadius:6, background:'var(--bg)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                            <i className="fa-regular fa-image" style={{ color:'var(--border)', fontSize:'1rem' }} />
+                          </div>
+                      }
                     </td>
                     <td>
                       <div style={{ fontWeight:600, fontSize:'0.9rem' }}>
@@ -696,8 +707,9 @@ export default function BlogPanel() {
           <div style={{ maxWidth:720 }}>
             {currentPost.imageUrl && (
               <div style={{ marginBottom:28, borderRadius:'var(--r)', overflow:'hidden', border:'1px solid var(--border)' }}>
-                <img src={currentPost.imageUrl} alt={currentPost.imageAlt || currentPost.title_en}
-                  style={{ width:'100%', maxHeight:360, objectFit:'cover', display:'block' }} />
+                <img src={normalizeDriveUrl(currentPost.imageUrl)} alt={currentPost.imageAlt || currentPost.title_en}
+                  style={{ width:'100%', maxHeight:360, objectFit:'cover', display:'block' }}
+                  onError={e => { e.target.style.display = 'none'; }} />
                 {currentPost.imageCredit && (
                   <div style={{ padding:'6px 12px', background:'var(--bg)', fontSize:'0.72rem', color:'var(--muted)', fontStyle:'italic' }}
                     dangerouslySetInnerHTML={{ __html: currentPost.imageCredit }}
@@ -899,7 +911,7 @@ export default function BlogPanel() {
                   </Field>
                   {form.imageUrl && (
                     <div style={{ marginBottom:12, borderRadius:'var(--r)', overflow:'hidden', border:'1px solid var(--border)' }}>
-                      <img src={form.imageUrl} alt={form.imageAlt || 'Preview'}
+                      <img src={normalizeDriveUrl(form.imageUrl)} alt={form.imageAlt || 'Preview'}
                         style={{ width:'100%', maxHeight:180, objectFit:'cover', display:'block' }}
                         onError={e => { e.target.style.display='none'; }}
                       />

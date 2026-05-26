@@ -1058,6 +1058,7 @@ function translateParagraph(para, from, to) {
 }
 
 function doTranslateBlog(body) {
+  if (!body) return jsonOut({ ok: false, error: 'doTranslateBlog must be called via POST, not run directly.' });
   var from    = String(body.from    || 'en');
   var to      = String(body.to      || 'es');
   var title   = String(body.title   || '');
