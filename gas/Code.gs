@@ -892,35 +892,64 @@ function handleImportMachines(machines) {
 //   A: id  |  B: title  |  C: slug  |  D: status  |  E: content  |  F: updatedAt
 //
 // status values: 'draft' | 'published'
-// content: markdown text
+// content: HTML (from WYSIWYG editor)
+// Languages: English (primary), Spanish (translation)
 
 const BLOG_SHEET_NAME = 'Blog';
 
+// Column map — 18 columns total (A–R)
 const BL = {
-  ID:         0,   // A
-  TITLE:      1,   // B
-  SLUG:       2,   // C
-  STATUS:     3,   // D
-  CONTENT:    4,   // E
-  UPDATED_AT: 5,   // F
+  ID:         0,   // A  — internal ID
+  TITLE:      1,   // B  — canonical/working title
+  SLUG:       2,   // C  — URL slug
+  STATUS:     3,   // D  — 'draft' | 'published'
+  CONTENT:    4,   // E  — canonical/working HTML body
+  UPDATED_AT: 5,   // F  — ISO timestamp
+  CATEGORY:   6,   // G  — category string
+  TAGS:       7,   // H  — comma-separated tags
+  AUTHOR:     8,   // I  — author name
+  TITLE_EN:   9,   // J  — English title
+  EXCERPT_EN: 10,  // K  — English excerpt (plain text)
+  CONTENT_EN: 11,  // L  — English HTML body
+  IMAGE_URL:  12,  // M  — hero image URL (imageURL header)
+  IMAGE_ALT:  13,  // N  — image ALT text
+  FEATURED:   14,  // O  — 'true' | 'false'
+  TITLE_ES:   15,  // P  — Spanish title
+  EXCERPT_ES: 16,  // Q  — Spanish excerpt (plain text)
+  CONTENT_ES: 17,  // R  — Spanish HTML body
 };
-const TOTAL_COLS_BLOG = 6;
+const TOTAL_COLS_BLOG = 18;
 
 function getSheetBlog() {
   const ss    = SpreadsheetApp.openById(SS_ID);
   const sheet = ss.getSheetByName(BLOG_SHEET_NAME);
-  if (!sheet) throw new Error('Blog sheet not found — please add a sheet named "Blog" with headers: id | title | slug | status | content | updatedAt');
+  if (!sheet) throw new Error(
+    'Blog sheet not found — please add a sheet named "Blog" with 16 header columns (A–P): ' +
+    'id | title | slug | status | content | updatedAt | category | tags | author | excerpt | imageUrl | imageAlt | featured | title_es | excerpt_es | content_es'
+  );
   return sheet;
 }
 
 function rowToAppBlog(row) {
   return {
-    id:        String(row[BL.ID]         || ''),
-    title:     String(row[BL.TITLE]      || ''),
-    slug:      String(row[BL.SLUG]       || ''),
-    status:    String(row[BL.STATUS]     || 'draft'),
-    content:   String(row[BL.CONTENT]    || ''),
-    updatedAt: String(row[BL.UPDATED_AT] || ''),
+    id:         String(row[BL.ID]         || ''),
+    title:      String(row[BL.TITLE]      || ''),
+    slug:       String(row[BL.SLUG]       || ''),
+    status:     String(row[BL.STATUS]     || 'draft'),
+    content:    String(row[BL.CONTENT]    || ''),
+    updatedAt:  String(row[BL.UPDATED_AT] || ''),
+    category:   String(row[BL.CATEGORY]   || ''),
+    tags:       String(row[BL.TAGS]       || ''),
+    author:     String(row[BL.AUTHOR]     || ''),
+    title_en:   String(row[BL.TITLE_EN]   || ''),
+    excerpt_en: String(row[BL.EXCERPT_EN] || ''),
+    content_en: String(row[BL.CONTENT_EN] || ''),
+    imageUrl:   String(row[BL.IMAGE_URL]  || ''),
+    imageAlt:   String(row[BL.IMAGE_ALT]  || ''),
+    featured:   row[BL.FEATURED] === true || String(row[BL.FEATURED]) === 'true',
+    title_es:   String(row[BL.TITLE_ES]   || ''),
+    excerpt_es: String(row[BL.EXCERPT_ES] || ''),
+    content_es: String(row[BL.CONTENT_ES] || ''),
   };
 }
 
@@ -931,6 +960,18 @@ function applyToRowBlog(row, post) {
   if (post.status     !== undefined) row[BL.STATUS]     = post.status;
   if (post.content    !== undefined) row[BL.CONTENT]    = post.content;
   if (post.updatedAt  !== undefined) row[BL.UPDATED_AT] = post.updatedAt;
+  if (post.category   !== undefined) row[BL.CATEGORY]   = post.category;
+  if (post.tags       !== undefined) row[BL.TAGS]       = post.tags;
+  if (post.author     !== undefined) row[BL.AUTHOR]     = post.author;
+  if (post.title_en   !== undefined) row[BL.TITLE_EN]   = post.title_en;
+  if (post.excerpt_en !== undefined) row[BL.EXCERPT_EN] = post.excerpt_en;
+  if (post.content_en !== undefined) row[BL.CONTENT_EN] = post.content_en;
+  if (post.imageUrl   !== undefined) row[BL.IMAGE_URL]  = post.imageUrl;
+  if (post.imageAlt   !== undefined) row[BL.IMAGE_ALT]  = post.imageAlt;
+  if (post.featured   !== undefined) row[BL.FEATURED]   = String(post.featured);
+  if (post.title_es   !== undefined) row[BL.TITLE_ES]   = post.title_es;
+  if (post.excerpt_es !== undefined) row[BL.EXCERPT_ES] = post.excerpt_es;
+  if (post.content_es !== undefined) row[BL.CONTENT_ES] = post.content_es;
   return row;
 }
 
