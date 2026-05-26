@@ -10,10 +10,12 @@
  *  4. (First-time only) Set VITE_BUTLER_COFFEE_API_URL in Netlify env vars
  *
  * ROUTING:
- *  GET  /exec             → Coffee sheet
- *  GET  /exec?sheet=subs  → Subscription sheet
- *  POST /exec             → Coffee (body.sheet undefined)
- *  POST /exec             → Subs   (body.sheet === 'subs')
+ *  GET  /exec                  → Coffee sheet
+ *  GET  /exec?sheet=subs       → Subscription sheet
+ *  GET  /exec?sheet=machines   → Machines sheet
+ *  POST /exec                  → Coffee   (body.sheet undefined)
+ *  POST /exec                  → Subs     (body.sheet === 'subs')
+ *  POST /exec                  → Machines (body.sheet === 'machines')
  */
 
 const SS_ID    = '1nT5v6u7pz8qv1cloSDT7GpDDfodXk1LID8rMeRkzIeY';
@@ -232,9 +234,8 @@ function getSheet() {
 
 function doGet(e) {
   try {
-    if (e && e.parameter && e.parameter.sheet === 'subs') {
-      return doGetSubs();
-    }
+    if (e && e.parameter && e.parameter.sheet === 'subs')     return doGetSubs();
+    if (e && e.parameter && e.parameter.sheet === 'machines') return doGetMachines();
     const sheet = getSheet();
     const data  = sheet.getDataRange().getValues();
     const coffees = [];
@@ -268,6 +269,14 @@ function doPost(e) {
       if (body.action === 'import')      return handleImportSubs(body.subscriptions);
       if (body.action === 'uploadImage') return handleUploadImage(body.filename, body.mimeType, body.data, 'Butler Subscription Images');
       return jsonOut({ ok: false, error: 'Unknown subs action: ' + body.action });
+    }
+
+    // Route to Machines handlers
+    if (body.sheet === 'machines') {
+      if (body.action === 'save')   return handleSaveMachine(body.machine);
+      if (body.action === 'delete') return handleDeleteMachine(body.id);
+      if (body.action === 'import') return handleImportMachines(body.machines);
+      return jsonOut({ ok: false, error: 'Unknown machines action: ' + body.action });
     }
 
     // Coffee handlers (default)
@@ -615,4 +624,252 @@ function handleImportSubs(subs) {
   }
 
   return jsonOut({ ok: true, data: subs });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── MACHINES SHEET ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const SHEET_NAME_MACHINES = 'Machines'; // exact tab name
+
+// Column indices (0-based) — 36 existing + 6 image columns (AK–AP)
+// IMPORTANT: MC.PROFIT (col 11) and MC.MARGIN (col 12) are formula cells — NEVER overwrite them.
+const MC = {
+  ID:           0,
+  PROVIDER:     1,
+  BRAND:        2,
+  NAME:         3,
+  MODEL:        4,
+  CATEGORY:     5,
+  VISIBLE:      6,
+  FEATURED:     7,
+  PVPR:         8,   // Recommended Retail Price
+  COST:         9,
+  SALE_PRICE:   10,
+  PROFIT:       11,  // FORMULA — never overwrite
+  MARGIN:       12,  // FORMULA — never overwrite
+  VAT:          13,
+  SUBTITLE_EN:  14,
+  SHORT_DESC_EN: 15,
+  LONG_DESC_EN: 16,
+  FEAT01_EN:    17,
+  FEAT02_EN:    18,
+  FEAT03_EN:    19,
+  FEAT04_EN:    20,
+  FEAT05_EN:    21,
+  FEAT06_EN:    22,
+  JURA_COFFEES: 23,
+  AREAS:        24,
+  DAILY_OUTPUT: 25,
+  STRIPE_LINK:  26,
+  SUBTITLE_ES:  27,
+  SHORT_DESC_ES: 28,
+  LONG_DESC_ES: 29,
+  FEAT01_ES:    30,
+  FEAT02_ES:    31,
+  FEAT03_ES:    32,
+  FEAT04_ES:    33,
+  FEAT05_ES:    34,
+  FEAT06_ES:    35,
+  IMAGE1:       36,  // Add headers Image1–Image6 (cols AK–AP) to your sheet
+  IMAGE2:       37,
+  IMAGE3:       38,
+  IMAGE4:       39,
+  IMAGE5:       40,
+  IMAGE6:       41
+};
+
+const TOTAL_COLS_MACHINES = 42;
+
+function getSheetMachines() {
+  return SpreadsheetApp.openById(SS_ID).getSheetByName(SHEET_NAME_MACHINES);
+}
+
+function rowToAppMachine(row) {
+  return {
+    id:           String(row[MC.ID]           || ''),
+    provider:     String(row[MC.PROVIDER]     || ''),
+    brand:        String(row[MC.BRAND]        || ''),
+    name:         String(row[MC.NAME]         || ''),
+    model:        String(row[MC.MODEL]        || ''),
+    category:     String(row[MC.CATEGORY]     || ''),
+    visible:      (row[MC.VISIBLE] === true
+                || String(row[MC.VISIBLE]).toUpperCase() === 'TRUE'
+                || String(row[MC.VISIBLE]).toUpperCase() === 'YES'),
+    featured:     (row[MC.FEATURED] === true
+                || String(row[MC.FEATURED]).toUpperCase() === 'TRUE'
+                || String(row[MC.FEATURED]).toUpperCase() === 'YES'),
+    pvpr:         parseMoney(row[MC.PVPR]),
+    cost:         parseMoney(row[MC.COST]),
+    salePrice:    parseMoney(row[MC.SALE_PRICE]),
+    profit:       parseMoney(row[MC.PROFIT]),   // read-only from formula
+    margin:       parseMoney(row[MC.MARGIN]),   // read-only from formula
+    vat:          parseMoney(row[MC.VAT]),
+    subtitleEN:   String(row[MC.SUBTITLE_EN]   || ''),
+    shortDescEN:  String(row[MC.SHORT_DESC_EN] || ''),
+    longDescEN:   String(row[MC.LONG_DESC_EN]  || ''),
+    feat01EN:     String(row[MC.FEAT01_EN]     || ''),
+    feat02EN:     String(row[MC.FEAT02_EN]     || ''),
+    feat03EN:     String(row[MC.FEAT03_EN]     || ''),
+    feat04EN:     String(row[MC.FEAT04_EN]     || ''),
+    feat05EN:     String(row[MC.FEAT05_EN]     || ''),
+    feat06EN:     String(row[MC.FEAT06_EN]     || ''),
+    juraCoffees:  String(row[MC.JURA_COFFEES]  || ''),
+    areas:        String(row[MC.AREAS]         || ''),
+    dailyOutput:  String(row[MC.DAILY_OUTPUT]  || ''),
+    stripeLink:   String(row[MC.STRIPE_LINK]   || ''),
+    subtitleES:   String(row[MC.SUBTITLE_ES]   || ''),
+    shortDescES:  String(row[MC.SHORT_DESC_ES] || ''),
+    longDescES:   String(row[MC.LONG_DESC_ES]  || ''),
+    feat01ES:     String(row[MC.FEAT01_ES]     || ''),
+    feat02ES:     String(row[MC.FEAT02_ES]     || ''),
+    feat03ES:     String(row[MC.FEAT03_ES]     || ''),
+    feat04ES:     String(row[MC.FEAT04_ES]     || ''),
+    feat05ES:     String(row[MC.FEAT05_ES]     || ''),
+    feat06ES:     String(row[MC.FEAT06_ES]     || ''),
+    image1:       String(row[MC.IMAGE1]        || ''),
+    image2:       String(row[MC.IMAGE2]        || ''),
+    image3:       String(row[MC.IMAGE3]        || ''),
+    image4:       String(row[MC.IMAGE4]        || ''),
+    image5:       String(row[MC.IMAGE5]        || ''),
+    image6:       String(row[MC.IMAGE6]        || ''),
+    updatedAt:    new Date().toISOString()
+  };
+}
+
+/** Write app-object back into a row array.
+ *  Skips MC.PROFIT and MC.MARGIN — those are formula cells. */
+function applyToRowMachine(row, m) {
+  function pm(v) { return v === undefined || v === '' ? '' : Number(v) || ''; }
+
+  row[MC.PROVIDER]      = m.provider     || '';
+  row[MC.BRAND]         = m.brand        || '';
+  row[MC.NAME]          = m.name         || '';
+  row[MC.MODEL]         = m.model        || '';
+  row[MC.CATEGORY]      = m.category     || '';
+  row[MC.VISIBLE]       = m.visible  === true || m.visible  === 'true';
+  row[MC.FEATURED]      = m.featured === true || m.featured === 'true';
+  row[MC.PVPR]          = pm(m.pvpr);
+  row[MC.COST]          = pm(m.cost);
+  row[MC.SALE_PRICE]    = pm(m.salePrice);
+  // MC.PROFIT and MC.MARGIN intentionally skipped (formula cells)
+  row[MC.VAT]           = pm(m.vat);
+  row[MC.SUBTITLE_EN]   = m.subtitleEN   || '';
+  row[MC.SHORT_DESC_EN] = m.shortDescEN  || '';
+  row[MC.LONG_DESC_EN]  = m.longDescEN   || '';
+  row[MC.FEAT01_EN]     = m.feat01EN     || '';
+  row[MC.FEAT02_EN]     = m.feat02EN     || '';
+  row[MC.FEAT03_EN]     = m.feat03EN     || '';
+  row[MC.FEAT04_EN]     = m.feat04EN     || '';
+  row[MC.FEAT05_EN]     = m.feat05EN     || '';
+  row[MC.FEAT06_EN]     = m.feat06EN     || '';
+  row[MC.JURA_COFFEES]  = m.juraCoffees  || '';
+  row[MC.AREAS]         = m.areas        || '';
+  row[MC.DAILY_OUTPUT]  = m.dailyOutput  || '';
+  row[MC.STRIPE_LINK]   = m.stripeLink   || '';
+  row[MC.SUBTITLE_ES]   = m.subtitleES   || '';
+  row[MC.SHORT_DESC_ES] = m.shortDescES  || '';
+  row[MC.LONG_DESC_ES]  = m.longDescES   || '';
+  row[MC.FEAT01_ES]     = m.feat01ES     || '';
+  row[MC.FEAT02_ES]     = m.feat02ES     || '';
+  row[MC.FEAT03_ES]     = m.feat03ES     || '';
+  row[MC.FEAT04_ES]     = m.feat04ES     || '';
+  row[MC.FEAT05_ES]     = m.feat05ES     || '';
+  row[MC.FEAT06_ES]     = m.feat06ES     || '';
+  row[MC.IMAGE1]        = m.image1       || '';
+  row[MC.IMAGE2]        = m.image2       || '';
+  row[MC.IMAGE3]        = m.image3       || '';
+  row[MC.IMAGE4]        = m.image4       || '';
+  row[MC.IMAGE5]        = m.image5       || '';
+  row[MC.IMAGE6]        = m.image6       || '';
+  return row;
+}
+
+// ─── Machines doGet ───────────────────────────────────────────────────────────
+
+function doGetMachines() {
+  const sheet    = getSheetMachines();
+  const data     = sheet.getDataRange().getValues();
+  const machines = [];
+
+  // Row 0 = headers, Row 1 = template (ID=0) → start at index 2
+  for (let i = 2; i < data.length; i++) {
+    const row = data[i];
+    if (String(row[MC.ID]).trim() === '' && String(row[MC.NAME]).trim() === '') continue;
+    machines.push(rowToAppMachine(row));
+  }
+  return jsonOut({ ok: true, data: machines });
+}
+
+// ─── Machines Save ────────────────────────────────────────────────────────────
+
+function handleSaveMachine(machine) {
+  const sheet = getSheetMachines();
+  const data  = sheet.getDataRange().getValues();
+
+  for (let i = 2; i < data.length; i++) {
+    if (String(data[i][MC.ID]) === String(machine.id)) {
+      const sheetRow   = i + 1;
+      const updatedRow = applyToRowMachine(ensureRowLength(copyRow(data[i]), TOTAL_COLS_MACHINES), machine);
+      sheet.getRange(sheetRow, 1, 1, TOTAL_COLS_MACHINES).setValues([updatedRow]);
+      return jsonOut({ ok: true, data: rowToAppMachine(updatedRow) });
+    }
+  }
+
+  // New row — assign next numeric ID
+  let maxId = 0;
+  for (let i = 1; i < data.length; i++) {
+    const id = parseInt(data[i][MC.ID], 10);
+    if (!isNaN(id) && id > maxId) maxId = id;
+  }
+  const newId  = maxId + 1;
+  const newRow = new Array(TOTAL_COLS_MACHINES).fill('');
+  newRow[MC.ID] = newId;
+  applyToRowMachine(newRow, machine);
+  sheet.appendRow(newRow);
+  return jsonOut({ ok: true, data: rowToAppMachine(newRow) });
+}
+
+// ─── Machines Delete ──────────────────────────────────────────────────────────
+
+function handleDeleteMachine(id) {
+  const sheet = getSheetMachines();
+  const data  = sheet.getDataRange().getValues();
+
+  for (let i = 2; i < data.length; i++) {
+    if (String(data[i][MC.ID]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return jsonOut({ ok: true, data: { deleted: id } });
+    }
+  }
+  return jsonOut({ ok: false, error: 'Row not found for id: ' + id });
+}
+
+// ─── Machines Import (bulk replace) ──────────────────────────────────────────
+
+function handleImportMachines(machines) {
+  if (!Array.isArray(machines) || machines.length === 0) {
+    return jsonOut({ ok: false, error: 'No machines provided for import' });
+  }
+
+  const sheet   = getSheetMachines();
+  const lastRow = sheet.getLastRow();
+
+  // Delete all data rows — keep row 1 (headers) and row 2 (template)
+  if (lastRow > 2) {
+    sheet.deleteRows(3, lastRow - 2);
+  }
+
+  const rows = machines.map(function(machine, i) {
+    const newRow = new Array(TOTAL_COLS_MACHINES).fill('');
+    newRow[MC.ID] = i + 1;
+    applyToRowMachine(newRow, machine);
+    return newRow;
+  });
+
+  if (rows.length > 0) {
+    sheet.getRange(3, 1, rows.length, TOTAL_COLS_MACHINES).setValues(rows);
+  }
+
+  return jsonOut({ ok: true, data: machines });
 }

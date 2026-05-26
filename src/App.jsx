@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiCall } from './lib/api.js';
 import LabelsPanel from './LabelsPanel.jsx';
 import SubscriptionPanel from './SubscriptionPanel.jsx';
+import MachinesPanel from './MachinesPanel.jsx';
 import { useAuth } from './AuthContext.jsx';
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
@@ -302,9 +303,13 @@ export default function App({ onBackToHub }) {
             <span className="nav-link__icon"><i className="fa-solid fa-layer-group" /></span>
             {!sc && <span>Sub Levels</span>}
           </button>
-          <button className="nav-link nav-link--soon" title="Coming soon">
+          <button
+            className={`nav-link${panel === 'machines' ? ' active' : ''}`}
+            onClick={() => setPanel('machines')}
+            title="Machines"
+          >
             <span className="nav-link__icon"><i className="fa-solid fa-gears" /></span>
-            {!sc && <><span>Machines</span><span className="nav-link__badge">soon</span></>}
+            {!sc && <span>Machines</span>}
           </button>
           <button className="nav-link nav-link--soon" title="Coming soon">
             <span className="nav-link__icon"><i className="fa-solid fa-pen-nib" /></span>
@@ -362,9 +367,10 @@ export default function App({ onBackToHub }) {
       <div className="topbar">
         <div className="topbar__left">
           <span className="topbar__title">
-            {panel === 'home'   ? 'Butler Coffee'
-              : panel === 'labels' ? 'Label Generator'
-              : panel === 'subs'   ? 'Subscription Levels'
+            {panel === 'home'     ? 'Butler Coffee'
+              : panel === 'labels'  ? 'Label Generator'
+              : panel === 'subs'    ? 'Subscription Levels'
+              : panel === 'machines'? 'Machines'
               : 'Coffee'}
           </span>
           {isCoffeePanel && <span className="topbar__count">{coffees.length} entr{coffees.length === 1 ? 'y' : 'ies'}</span>}
@@ -380,6 +386,8 @@ export default function App({ onBackToHub }) {
           ? <LabelsPanel coffees={coffees} />
           : panel === 'subs'
           ? <SubscriptionPanel />
+          : panel === 'machines'
+          ? <MachinesPanel />
           : panel === 'list'
           ? <ListPanel {...{ stats, search, setSearch, levelFilter, setLevelFilter, roasterFilter, setRoasterFilter, originFilter, setOriginFilter, visibilityFilter, setVisibilityFilter, filtered, openForm, openView, setPendingDeleteId }} />
           : panel === 'view'
@@ -439,11 +447,11 @@ function HomePanel({ setPanel }) {
       soon: false,
     },
     {
-      id: null,
+      id: 'machines',
       icon: 'fa-gears',
       title: 'Machines',
-      description: 'Equipment catalogue',
-      soon: true,
+      description: 'Equipment catalogue & pricing',
+      soon: false,
     },
     {
       id: null,
