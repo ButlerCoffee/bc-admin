@@ -284,8 +284,9 @@ function doPost(e) {
 
     // Route to Blog handlers
     if (body.sheet === 'blog') {
-      if (body.action === 'save')   return handleSaveBlogPost(body.post);
-      if (body.action === 'delete') return handleDeleteBlogPost(body.id);
+      if (body.action === 'save')      return handleSaveBlogPost(body.post);
+      if (body.action === 'delete')    return handleDeleteBlogPost(body.id);
+      if (body.action === 'translate') return doTranslateBlog(body);
       return jsonOut({ ok: false, error: 'Unknown blog action: ' + body.action });
     }
 
@@ -897,35 +898,35 @@ function handleImportMachines(machines) {
 
 const BLOG_SHEET_NAME = 'Blog';
 
-// Column map — 18 columns total (A–R)
+// Column map — 17 columns total (A–Q)
 const BL = {
   ID:         0,   // A  — internal ID
-  TITLE:      1,   // B  — canonical/working title
+  COPY_TITLE: 1,   // B  — mirrors title_en (sheet display / user-managed formula)
   SLUG:       2,   // C  — URL slug
   STATUS:     3,   // D  — 'draft' | 'published'
-  CONTENT:    4,   // E  — canonical/working HTML body
-  UPDATED_AT: 5,   // F  — ISO timestamp
-  CATEGORY:   6,   // G  — category string
-  TAGS:       7,   // H  — comma-separated tags
-  AUTHOR:     8,   // I  — author name
-  TITLE_EN:   9,   // J  — English title
-  EXCERPT_EN: 10,  // K  — English excerpt (plain text)
-  CONTENT_EN: 11,  // L  — English HTML body
-  IMAGE_URL:  12,  // M  — hero image URL (imageURL header)
-  IMAGE_ALT:  13,  // N  — image ALT text
-  FEATURED:   14,  // O  — 'true' | 'false'
-  TITLE_ES:   15,  // P  — Spanish title
-  EXCERPT_ES: 16,  // Q  — Spanish excerpt (plain text)
-  CONTENT_ES: 17,  // R  — Spanish HTML body
+  UPDATED_AT: 4,   // E  — ISO timestamp
+  CATEGORY:   5,   // F  — category string
+  TAGS:       6,   // G  — comma-separated tags
+  AUTHOR:     7,   // H  — author name
+  FEATURED:   8,   // I  — 'true' | 'false'
+  IMAGE_URL:    9,   // J  — hero image URL
+  IMAGE_ALT:    10,  // K  — image ALT text
+  IMAGE_CREDIT: 11,  // L  — image credit / attribution
+  TITLE_EN:     12,  // M  — English title (primary)
+  EXCERPT_EN:   13,  // N  — English excerpt (plain text)
+  CONTENT_EN:   14,  // O  — English HTML body
+  TITLE_ES:     15,  // P  — Spanish title
+  EXCERPT_ES:   16,  // Q  — Spanish excerpt (plain text)
+  CONTENT_ES:   17,  // R  — Spanish HTML body
 };
 const TOTAL_COLS_BLOG = 18;
 
 function getSheetBlog() {
-  const ss    = SpreadsheetApp.openById(SS_ID);
-  const sheet = ss.getSheetByName(BLOG_SHEET_NAME);
+  var ss    = SpreadsheetApp.openById(SS_ID);
+  var sheet = ss.getSheetByName(BLOG_SHEET_NAME);
   if (!sheet) throw new Error(
-    'Blog sheet not found — please add a sheet named "Blog" with 16 header columns (A–P): ' +
-    'id | title | slug | status | content | updatedAt | category | tags | author | excerpt | imageUrl | imageAlt | featured | title_es | excerpt_es | content_es'
+    'Blog sheet not found — add a sheet named "Blog" with 17 header columns (A–Q): ' +
+    'ID | Copy of Title | Slug | Status | updatedAt | category | tags | author | featured | ImageURL | imageALT | title_en | excerpt_en | content_en | title_es | excerpt_es | content_es'
   );
   return sheet;
 }
@@ -933,46 +934,65 @@ function getSheetBlog() {
 function rowToAppBlog(row) {
   return {
     id:         String(row[BL.ID]         || ''),
-    title:      String(row[BL.TITLE]      || ''),
     slug:       String(row[BL.SLUG]       || ''),
     status:     String(row[BL.STATUS]     || 'draft'),
-    content:    String(row[BL.CONTENT]    || ''),
     updatedAt:  String(row[BL.UPDATED_AT] || ''),
     category:   String(row[BL.CATEGORY]   || ''),
     tags:       String(row[BL.TAGS]       || ''),
     author:     String(row[BL.AUTHOR]     || ''),
+    featured:   row[BL.FEATURED] === true || String(row[BL.FEATURED]) === 'true',
+    imageUrl:   String(row[BL.IMAGE_URL]  || ''),
+    imageAlt:   String(row[BL.IMAGE_ALT]  || ''),
     title_en:   String(row[BL.TITLE_EN]   || ''),
     excerpt_en: String(row[BL.EXCERPT_EN] || ''),
     content_en: String(row[BL.CONTENT_EN] || ''),
-    imageUrl:   String(row[BL.IMAGE_URL]  || ''),
-    imageAlt:   String(row[BL.IMAGE_ALT]  || ''),
-    featured:   row[BL.FEATURED] === true || String(row[BL.FEATURED]) === 'true',
-    title_es:   String(row[BL.TITLE_ES]   || ''),
-    excerpt_es: String(row[BL.EXCERPT_ES] || ''),
-    content_es: String(row[BL.CONTENT_ES] || ''),
+    title_es:     String(row[BL.TITLE_ES]     || ''),
+    excerpt_es:   String(row[BL.EXCERPT_ES]   || ''),
+    content_es:   String(row[BL.CONTENT_ES]   || ''),
+    imageCredit:  String(row[BL.IMAGE_CREDIT] || ''),
   };
 }
 
 function applyToRowBlog(row, post) {
   if (post.id         !== undefined) row[BL.ID]         = post.id;
-  if (post.title      !== undefined) row[BL.TITLE]      = post.title;
+  if (post.title_en   !== undefined) row[BL.COPY_TITLE] = post.title_en; // mirror for sheet readability
   if (post.slug       !== undefined) row[BL.SLUG]       = post.slug;
   if (post.status     !== undefined) row[BL.STATUS]     = post.status;
-  if (post.content    !== undefined) row[BL.CONTENT]    = post.content;
   if (post.updatedAt  !== undefined) row[BL.UPDATED_AT] = post.updatedAt;
   if (post.category   !== undefined) row[BL.CATEGORY]   = post.category;
   if (post.tags       !== undefined) row[BL.TAGS]       = post.tags;
   if (post.author     !== undefined) row[BL.AUTHOR]     = post.author;
+  if (post.featured   !== undefined) row[BL.FEATURED]   = String(post.featured);
+  if (post.imageUrl   !== undefined) row[BL.IMAGE_URL]  = post.imageUrl;
+  if (post.imageAlt   !== undefined) row[BL.IMAGE_ALT]  = post.imageAlt;
   if (post.title_en   !== undefined) row[BL.TITLE_EN]   = post.title_en;
   if (post.excerpt_en !== undefined) row[BL.EXCERPT_EN] = post.excerpt_en;
   if (post.content_en !== undefined) row[BL.CONTENT_EN] = post.content_en;
-  if (post.imageUrl   !== undefined) row[BL.IMAGE_URL]  = post.imageUrl;
-  if (post.imageAlt   !== undefined) row[BL.IMAGE_ALT]  = post.imageAlt;
-  if (post.featured   !== undefined) row[BL.FEATURED]   = String(post.featured);
-  if (post.title_es   !== undefined) row[BL.TITLE_ES]   = post.title_es;
-  if (post.excerpt_es !== undefined) row[BL.EXCERPT_ES] = post.excerpt_es;
-  if (post.content_es !== undefined) row[BL.CONTENT_ES] = post.content_es;
+  if (post.title_es     !== undefined) row[BL.TITLE_ES]     = post.title_es;
+  if (post.excerpt_es   !== undefined) row[BL.EXCERPT_ES]   = post.excerpt_es;
+  if (post.content_es   !== undefined) row[BL.CONTENT_ES]   = post.content_es;
+  if (post.imageCredit  !== undefined) row[BL.IMAGE_CREDIT] = post.imageCredit;
   return row;
+}
+
+// ─── Blog Auto-translate (EN → ES via LanguageApp) ────────────────────────────
+
+function doTranslateBlog(body) {
+  try {
+    var title   = String(body.title   || '');
+    var excerpt = String(body.excerpt || '');
+    var content = String(body.content || '');
+    return jsonOut({
+      ok: true,
+      data: {
+        title_es:   title   ? LanguageApp.translate(title,   'en', 'es') : '',
+        excerpt_es: excerpt ? LanguageApp.translate(excerpt, 'en', 'es') : '',
+        content_es: content ? LanguageApp.translate(content, 'en', 'es') : '',
+      }
+    });
+  } catch(e) {
+    return jsonOut({ ok: false, error: 'Translation failed: ' + e.message });
+  }
 }
 
 // ─── Blog doGet ───────────────────────────────────────────────────────────────
