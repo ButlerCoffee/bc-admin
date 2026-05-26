@@ -975,7 +975,33 @@ function applyToRowBlog(row, post) {
   return row;
 }
 
-// ─── Blog Auto-translate (EN → ES via LanguageApp) ────────────────────────────
+// ─── Blog Auto-translate (bidirectional via LanguageApp) ─────────────────────
+//
+// Google Translate handles plain text well but mangles HTML tags.
+// We strip HTML to plain text before translating so we always get a clean
+// result. The frontend switches to Markdown mode after any translation.
+
+function stripHtmlForTranslation(s) {
+  // Replace block tags with newlines, inline tags with space, then collapse
+  return s
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n\n')
+    .replace(/<\/blockquote>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function isHtmlString(s) { return /^\s*<[a-zA-Z]/.test(s); }
 
 function doTranslateBlog(body) {
   var from    = String(body.from    || 'en');
@@ -983,13 +1009,17 @@ function doTranslateBlog(body) {
   var title   = String(body.title   || '');
   var excerpt = String(body.excerpt || '');
   var content = String(body.content || '');
+
+  // Strip HTML → plain text so Google Translate doesn't garble tags
+  var plainContent = isHtmlString(content) ? stripHtmlForTranslation(content) : content;
+
   try {
     return jsonOut({
       ok: true,
       data: {
-        title:   title   ? LanguageApp.translate(title,   from, to) : '',
-        excerpt: excerpt ? LanguageApp.translate(excerpt, from, to) : '',
-        content: content ? LanguageApp.translate(content, from, to) : '',
+        title:   title        ? LanguageApp.translate(title,        from, to) : '',
+        excerpt: excerpt      ? LanguageApp.translate(excerpt,      from, to) : '',
+        content: plainContent ? LanguageApp.translate(plainContent, from, to) : '',
       }
     });
   } catch(e) {

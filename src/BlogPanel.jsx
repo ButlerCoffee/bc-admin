@@ -194,12 +194,14 @@ function Field({ label, required, hint, children }) {
 
 // ── Rich Text Editor (Visual / WYSIWYG) ───────────────────────────────────────
 function RichTextEditor({ value, onChange, resetKey, placeholder = 'Start writing…', minH = 300 }) {
-  const ref = useRef(null);
+  const ref     = useRef(null);
+  const valueRef = useRef(value);
+  valueRef.current = value; // always kept current — avoids stale closure in resetKey effect
   const [wc, setWc] = useState('0 words');
 
   useEffect(() => {
     if (!ref.current) return;
-    ref.current.innerHTML = value || '';
+    ref.current.innerHTML = valueRef.current || ''; // use ref so we always read the latest value
     refreshWc();
   }, [resetKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -443,8 +445,8 @@ export default function BlogPanel() {
           excerpt_es: result.excerpt || f.excerpt_es,
           content_es: result.content || f.content_es,
         }));
-        // Match target editor mode to source format so the content looks right
-        setModeES(isHtml(srcContent) ? 'wysiwyg' : 'markdown');
+        // GAS always returns plain text (HTML stripped before translating) → Markdown mode
+        setModeES('markdown');
         setResetES(c => c + 1);
       } else {
         setForm(f => ({
@@ -453,10 +455,11 @@ export default function BlogPanel() {
           excerpt_en: result.excerpt || f.excerpt_en,
           content_en: result.content || f.content_en,
         }));
-        setModeEN(isHtml(srcContent) ? 'wysiwyg' : 'markdown');
+        // GAS always returns plain text (HTML stripped before translating) → Markdown mode
+        setModeEN('markdown');
         setResetEN(c => c + 1);
       }
-      toast(`Translated to ${to === 'es' ? 'Spanish 🇪🇸' : 'English 🇬🇧'}! Review and edit as needed.`);
+      toast(`Translated to ${to === 'es' ? 'Spanish 🇪🇸' : 'English 🇨🇦'}! Review and edit as needed.`);
     } catch (err) {
       toast(`Translation failed — ${err.message}`, 'error');
     } finally { setTranslating(false); }
@@ -610,7 +613,7 @@ export default function BlogPanel() {
             </div>
             {hasSpanish && (
               <div style={{ display:'flex', gap:4 }}>
-                {[['en','🇬🇧 EN'],['es','🇪🇸 ES']].map(([l,lbl]) => (
+                {[['en','🇨🇦 EN'],['es','🇪🇸 ES']].map(([l,lbl]) => (
                   <button key={l} type="button" onClick={() => setViewLang(l)} style={{
                     padding:'3px 10px', borderRadius:4, border:'1px solid var(--border)', cursor:'pointer',
                     background: viewLang === l ? 'var(--yellow)' : 'transparent', fontWeight:700, fontSize:'0.72rem',
@@ -692,7 +695,7 @@ export default function BlogPanel() {
 
                 {/* English — primary */}
                 <Card
-                  icon="🇬🇧"
+                  icon="🇨🇦"
                   title="English"
                   right={
                     <TranslateBtn
@@ -735,7 +738,7 @@ export default function BlogPanel() {
                   defaultOpen={Boolean(form.title_es || form.content_es)}
                   right={
                     <TranslateBtn
-                      label="Translate from EN 🇬🇧"
+                      label="Translate from EN 🇨🇦"
                       loading={translating === 'es'}
                       onClick={() => autoTranslate('en', 'es')}
                     />
