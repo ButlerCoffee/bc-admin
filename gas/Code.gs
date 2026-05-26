@@ -284,9 +284,10 @@ function doPost(e) {
 
     // Route to Blog handlers
     if (body.sheet === 'blog') {
-      if (body.action === 'save')      return handleSaveBlogPost(body.post);
-      if (body.action === 'delete')    return handleDeleteBlogPost(body.id);
-      if (body.action === 'translate') return doTranslateBlog(body);
+      if (body.action === 'save')        return handleSaveBlogPost(body.post);
+      if (body.action === 'delete')      return handleDeleteBlogPost(body.id);
+      if (body.action === 'translate')   return doTranslateBlog(body);
+      if (body.action === 'uploadImage') return handleUploadImage(body.filename, body.mimeType, body.data, 'Butler Blog Images', 'w1200');
       return jsonOut({ ok: false, error: 'Unknown blog action: ' + body.action });
     }
 
@@ -358,12 +359,14 @@ function handleDelete(id) {
  * @param {string} mimeType
  * @param {string} base64data
  * @param {string} [folderName] — defaults to 'Butler Coffee Images'
+ * @param {string} [sz]         — thumbnail size, e.g. 'w800', 'w1200' (default 'w800')
  */
-function handleUploadImage(filename, mimeType, base64data, folderName) {
+function handleUploadImage(filename, mimeType, base64data, folderName, sz) {
   try {
     const bytes  = Utilities.base64Decode(base64data);
     const blob   = Utilities.newBlob(bytes, mimeType, filename || 'butler-image');
     const name   = folderName || 'Butler Coffee Images';
+    const size   = sz || 'w800';
 
     // Find or create the target folder
     const it     = DriveApp.getFoldersByName(name);
@@ -373,7 +376,7 @@ function handleUploadImage(filename, mimeType, base64data, folderName) {
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
     const fileId = file.getId();
-    const url    = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w400';
+    const url    = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=' + size;
     return jsonOut({ ok: true, data: { url: url, fileId: fileId } });
   } catch (err) {
     return jsonOut({ ok: false, error: 'Image upload failed: ' + err.message });
@@ -977,139 +980,81 @@ function applyToRowBlog(row, post) {
 
 // ─── Blog Auto-translate (bidirectional via LanguageApp) ─────────────────────
 //
-// Strategy:
-//  • HTML source  → parse into typed blocks (h1–h4, p, li, blockquote, hr)
-//                   → batch-translate all text in ONE LanguageApp call, using
-//                     a separator that Google Translate passes through unchanged
-//                   → reassemble as Markdown (frontend is already in Markdown mode)
-//  • Markdown/plain source → split on double-newlines → same batch trick → rejoin
+// Pipeline:
+//  1. If HTML → htmlToMarkdown() converts headings, lists, blockquotes, hr to MD
+//  2. Split on \n\n → array of paragraphs (each may start with # / ## / - / > )
+//  3. translateParagraph() strips the MD prefix, calls LanguageApp, re-attaches
+//     the prefix. HR lines (---) are passed through untranslated.
 //
-// This preserves headings, paragraphs, list items and blockquotes across
-// any language pair, instead of collapsing everything into one big paragraph.
+// Individual per-paragraph calls are used instead of a batched separator because
+// Google Translate unpredictably modifies or drops separator strings.
 
-var TRANS_SEP = ' ||| '; // Google Translate reliably passes ||| through unchanged
+function isHtmlString(s) { return /^\s*<[a-zA-Z]/.test(s || ''); }
 
-/** Strip inline HTML tags and decode common entities. */
-function stripInlineTags(s) {
+/** Strip all HTML tags and decode common entities to plain text. */
+function stripInline(s) {
   return (s || '')
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g,  '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
     .replace(/\s+/g, ' ').trim();
 }
 
-function isHtmlString(s) { return /^\s*<[a-zA-Z]/.test(s || ''); }
+/**
+ * Convert HTML to clean Markdown.
+ * Block elements → Markdown equivalents; inline tags stripped; entities decoded.
+ */
+function htmlToMarkdown(html) {
+  return (html || '')
+    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, function(_, t) { return '\n\n# '    + stripInline(t) + '\n\n'; })
+    .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, function(_, t) { return '\n\n## '   + stripInline(t) + '\n\n'; })
+    .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, function(_, t) { return '\n\n### '  + stripInline(t) + '\n\n'; })
+    .replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, function(_, t) { return '\n\n#### ' + stripInline(t) + '\n\n'; })
+    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi,  function(_, t) { return '\n- ' + stripInline(t); })
+    .replace(/<\/?(?:ul|ol)[^>]*>/gi, '\n')
+    .replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, function(_, t) { return '\n\n> ' + stripInline(t) + '\n\n'; })
+    .replace(/<hr[^>]*\/?>/gi, '\n\n---\n\n')
+    .replace(/<\/(?:p|div)>/gi, '\n\n').replace(/<(?:p|div)[^>]*>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
 
 /**
- * Parse HTML into an ordered array of { type, text } blocks.
- * Types: 'h1' | 'h2' | 'h3' | 'h4' | 'p' | 'li' | 'bq' | 'hr'
- * Nested matches (e.g. <p> inside <blockquote>) are skipped to avoid duplication.
+ * Translate one Markdown paragraph.
+ * - Detects "# ", "## ", "- ", "> " prefixes → strips, translates text, re-attaches.
+ * - "---" dividers are passed through unchanged.
+ * - Multi-line list blocks (lines joined by \n) are translated line by line.
  */
-function parseHtmlBlocks(html) {
-  var h = (html || '').replace(/[ \t]+/g, ' ');
+function translateParagraph(para, from, to) {
+  var p = para.trim();
+  if (!p) return p;
+  if (/^-{3,}$/.test(p)) return p;                          // HR — pass through
 
-  var matchers = [
-    { tag: 'h1',         type: 'h1' },
-    { tag: 'h2',         type: 'h2' },
-    { tag: 'h3',         type: 'h3' },
-    { tag: 'h4',         type: 'h4' },
-    { tag: 'li',         type: 'li' },
-    { tag: 'blockquote', type: 'bq' },
-    { tag: 'p',          type: 'p'  },
-  ];
+  // Single-line Markdown prefix (# heading or - list item or > blockquote)
+  var prefixMatch = p.match(/^(#{1,4} |- |> )/);
+  if (prefixMatch) {
+    var prefix = prefixMatch[1];
+    var text   = p.slice(prefix.length).trim();
+    return text ? prefix + LanguageApp.translate(text, from, to) : p;
+  }
 
-  var allMatches = [];
-
-  matchers.forEach(function(m) {
-    var re = new RegExp('<' + m.tag + '[^>]*>([\\s\\S]*?)<\\/' + m.tag + '>', 'gi');
-    var match;
-    while ((match = re.exec(h)) !== null) {
-      var text = stripInlineTags(match[1]);
-      if (text) {
-        allMatches.push({
-          index: match.index,
-          end:   match.index + match[0].length,
-          type:  m.type,
-          text:  text,
-        });
+  // Multi-line block (e.g. consecutive list items joined by \n)
+  if (p.indexOf('\n') !== -1) {
+    return p.split('\n').map(function(line) {
+      var lm = line.match(/^(- |> )/);
+      if (lm) {
+        var lt = line.slice(lm[1].length).trim();
+        return lt ? lm[1] + LanguageApp.translate(lt, from, to) : line;
       }
-    }
-  });
-
-  // HR is self-closing
-  var hrRe = /<hr[^>]*\/?>/gi, hrM;
-  while ((hrM = hrRe.exec(h)) !== null) {
-    allMatches.push({ index: hrM.index, end: hrM.index + hrM[0].length, type: 'hr', text: '' });
+      return line.trim() ? LanguageApp.translate(line.trim(), from, to) : line;
+    }).join('\n');
   }
 
-  // Sort by document position; skip matches that fall inside an already-claimed range
-  allMatches.sort(function(a, b) { return a.index - b.index; });
-  var blocks = [], lastEnd = 0;
-  allMatches.forEach(function(m) {
-    if (m.index >= lastEnd) {
-      blocks.push({ type: m.type, text: m.text });
-      lastEnd = m.end;
-    }
-  });
-
-  // Fallback: no block elements found → treat whole thing as one paragraph
-  if (blocks.length === 0) {
-    var plain = stripInlineTags(h);
-    if (plain) blocks.push({ type: 'p', text: plain });
-  }
-
-  return blocks;
-}
-
-/**
- * Translate an array of blocks in one LanguageApp call and return Markdown.
- * HR blocks are passed through as '---'.
- */
-function translateBlocksToMarkdown(blocks, from, to) {
-  if (!blocks.length) return '';
-
-  // Collect only translatable text and remember which block each piece belongs to
-  var texts    = [];
-  var blockIdx = [];
-  blocks.forEach(function(b, i) {
-    if (b.type !== 'hr' && b.text) { texts.push(b.text); blockIdx.push(i); }
-  });
-
-  var translatedTexts = [];
-  if (texts.length > 0) {
-    var joined     = texts.join(TRANS_SEP);
-    var translated = LanguageApp.translate(joined, from, to);
-    translatedTexts = translated.split(TRANS_SEP).map(function(t) { return t.trim(); });
-  }
-
-  return blocks.map(function(b, i) {
-    if (b.type === 'hr') return '---';
-    var pos  = blockIdx.indexOf(i);
-    var text = (pos >= 0 && translatedTexts[pos]) ? translatedTexts[pos] : b.text;
-    switch (b.type) {
-      case 'h1': return '# '   + text;
-      case 'h2': return '## '  + text;
-      case 'h3': return '### ' + text;
-      case 'h4': return '#### '+ text;
-      case 'li': return '- '   + text;
-      case 'bq': return '> '   + text;
-      default:   return text;
-    }
-  }).join('\n\n');
-}
-
-/**
- * Translate plain-text / Markdown content while preserving paragraph breaks.
- * Splits on double-newlines, batch-translates, rejoins.
- */
-function translateMarkdownContent(content, from, to) {
-  var paras = (content || '').split(/\n\n+/).map(function(p) { return p.trim(); }).filter(Boolean);
-  if (!paras.length) return '';
-  if (paras.length === 1) return LanguageApp.translate(paras[0], from, to);
-  var joined     = paras.join(TRANS_SEP);
-  var translated = LanguageApp.translate(joined, from, to);
-  return translated.split(TRANS_SEP).map(function(p) { return p.trim(); }).filter(Boolean).join('\n\n');
+  return LanguageApp.translate(p, from, to);
 }
 
 function doTranslateBlog(body) {
@@ -1122,9 +1067,11 @@ function doTranslateBlog(body) {
   try {
     var translatedContent = '';
     if (content) {
-      translatedContent = isHtmlString(content)
-        ? translateBlocksToMarkdown(parseHtmlBlocks(content), from, to)
-        : translateMarkdownContent(content, from, to);
+      var md    = isHtmlString(content) ? htmlToMarkdown(content) : content;
+      var paras = md.split(/\n\n+/).filter(function(p) { return p.trim(); });
+      translatedContent = paras
+        .map(function(p) { return translateParagraph(p, from, to); })
+        .join('\n\n');
     }
 
     return jsonOut({

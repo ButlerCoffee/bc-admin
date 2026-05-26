@@ -22,6 +22,45 @@ import { toSlug } from './CoffeeContext.jsx';
 // ── Detect content format ─────────────────────────────────────────────────────
 function isHtml(s) { return /^\s*<[a-zA-Z]/.test(s || ''); }
 
+// ── Google Drive URL normalizer ───────────────────────────────────────────────
+// Converts share/view links to the thumbnail format that works as <img src>.
+// e.g. https://drive.google.com/file/d/FILE_ID/view  →  thumbnail URL
+function normalizeDriveUrl(url) {
+  if (!url) return url;
+  const fileId =
+    (url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+     url.match(/[?&]id=([a-zA-Z0-9_-]+)/))?.[1];
+  if (fileId && url.includes('google')) {
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
+  }
+  return url;
+}
+
+// ── Client-side image compression (canvas → JPEG base64) ─────────────────────
+function compressImage(file, maxPx = 1400, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const blobUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(blobUrl);
+      const scale  = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width  * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]); // base64 only
+        reader.onerror   = reject;
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = reject;
+    img.src = blobUrl;
+  });
+}
+
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 function renderMarkdown(md) {
   if (!md) return '';
@@ -70,14 +109,14 @@ function useBlogStyles() {
     el.id = 'blog-panel-styles';
     el.textContent = `
       /* Rich-text editor */
-      .re { border:1px solid var(--border); border-radius:var(--r); overflow:hidden; background:var(--card); }
-      .re__bar { display:flex; flex-wrap:wrap; align-items:center; gap:1px; padding:5px 8px; background:var(--bg); border-bottom:1px solid var(--border); min-height:38px; }
+      .re { border:1px solid var(--border); border-radius:var(--r); background:var(--card); }
+      .re__bar { display:flex; flex-wrap:wrap; align-items:center; gap:1px; padding:5px 8px; background:var(--bg); border-bottom:1px solid var(--border); min-height:38px; position:sticky; top:0; z-index:15; border-radius:var(--r) var(--r) 0 0; }
       .re__btn { display:inline-flex; align-items:center; justify-content:center; min-width:28px; height:26px; padding:0 6px; border:none; border-radius:4px; cursor:pointer; background:transparent; color:var(--text); font-size:0.76rem; font-weight:700; transition:background 0.1s; }
       .re__btn:hover { background:var(--border); }
       .re__sep { width:1px; height:18px; background:var(--border); margin:0 4px; flex-shrink:0; }
       .re__body { overflow-y:auto; padding:18px 20px; outline:none; font-size:0.93rem; line-height:1.82; color:var(--text); }
       .re__body:empty::before { content:attr(data-ph); color:var(--muted); font-style:italic; pointer-events:none; display:block; }
-      .re__foot { padding:4px 12px; background:var(--bg); border-top:1px solid var(--border); font-size:0.72rem; color:var(--muted); }
+      .re__foot { padding:4px 12px; background:var(--bg); border-top:1px solid var(--border); font-size:0.72rem; color:var(--muted); border-radius:0 0 var(--r) var(--r); }
       /* Editor mode toggle */
       .ed-toggle { display:inline-flex; gap:2px; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:2px; margin-bottom:6px; }
       .ed-toggle__btn { padding:3px 10px; border:none; border-radius:4px; cursor:pointer; background:transparent; color:var(--muted); font-size:0.72rem; font-weight:600; }
@@ -348,6 +387,7 @@ export default function BlogPanel() {
   const [viewLang,    setViewLang]    = useState('en');
   const [pendingDeleteSlug, setPendingDeleteSlug] = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [uploading,         setUploading]         = useState(false);
 
   // ── Form initialization ──────────────────────────────────────────────────────
   const formKeyRef = useRef('');
@@ -488,6 +528,26 @@ export default function BlogPanel() {
       toast('Post deleted.', 'error');
     } catch (err) { toast(`Delete failed — ${err.message}`, 'error'); }
     finally { setLoading(false); }
+  }
+
+  // ── Image upload ─────────────────────────────────────────────────────────────
+  async function uploadBlogImage(file) {
+    setUploading(true);
+    try {
+      const base64 = await compressImage(file);
+      const result = await apiCall('POST', {
+        action:   'uploadImage',
+        filename: file.name.replace(/\.[^.]+$/, '') + '.jpg',
+        mimeType: 'image/jpeg',
+        data:     base64,
+      }, 'blog');
+      updateField('imageUrl', result.url);
+      toast('Image uploaded!');
+    } catch (err) {
+      toast(`Upload failed — ${err.message}`, 'error');
+    } finally {
+      setUploading(false);
+    }
   }
 
   // ── Derived ──────────────────────────────────────────────────────────────────
@@ -819,12 +879,30 @@ export default function BlogPanel() {
                 </Card>
 
                 <Card icon={<i className="fa-regular fa-image" />} title="Featured Image">
-                  <Field label="Image URL">
-                    <input className="input" type="url" value={form.imageUrl} onChange={e => updateField('imageUrl', e.target.value)} placeholder="https://…" />
+                  <Field label="Image" hint="Paste any URL, a Google Drive share link, or upload a file (auto-compressed to JPEG).">
+                    <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                      <input className="input" type="url" value={form.imageUrl}
+                        onChange={e => updateField('imageUrl', normalizeDriveUrl(e.target.value))}
+                        onBlur={e  => updateField('imageUrl', normalizeDriveUrl(e.target.value))}
+                        placeholder="https://… or paste Drive share link"
+                        style={{ flex:1 }} />
+                      <label style={{ flexShrink:0, cursor:'pointer' }} title="Upload and compress image">
+                        <input type="file" accept="image/*" style={{ display:'none' }}
+                          onChange={e => { if (e.target.files[0]) uploadBlogImage(e.target.files[0]); e.target.value = ''; }} />
+                        <span className="btn btn--ghost btn--sm btn--icon" style={{ pointerEvents:'none' }}>
+                          {uploading
+                            ? <i className="fa-solid fa-circle-notch fa-spin" />
+                            : <i className="fa-solid fa-upload" />}
+                        </span>
+                      </label>
+                    </div>
                   </Field>
                   {form.imageUrl && (
                     <div style={{ marginBottom:12, borderRadius:'var(--r)', overflow:'hidden', border:'1px solid var(--border)' }}>
-                      <img src={form.imageUrl} alt={form.imageAlt || 'Preview'} style={{ width:'100%', maxHeight:180, objectFit:'cover', display:'block' }} />
+                      <img src={form.imageUrl} alt={form.imageAlt || 'Preview'}
+                        style={{ width:'100%', maxHeight:180, objectFit:'cover', display:'block' }}
+                        onError={e => { e.target.style.display='none'; }}
+                      />
                     </div>
                   )}
                   <Field label="Image ALT text">
