@@ -238,8 +238,9 @@ export default function MachinesPanel() {
   const [mode,      setMode]      = useState('list'); // 'list' | 'view' | 'form'
   const [currentId, setCurrentId] = useState(null);
   const [form,      setForm]      = useState(emptyMachine);
-  const [search,    setSearch]    = useState('');
-  const [catFilter, setCatFilter] = useState('');
+  const [search,      setSearch]      = useState('');
+  const [catFilter,   setCatFilter]   = useState('');
+  const [areaFilter,  setAreaFilter]  = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
@@ -274,15 +275,23 @@ export default function MachinesPanel() {
 
   useEffect(() => { pullFromSheet(); }, []);
 
-  // Filtered list
-  const filtered = machines.filter(m => {
-    const q = search.toLowerCase();
-    const textMatch = !q || [m.brand, m.name, m.model, m.category].some(v => (v||'').toLowerCase().includes(q));
-    return textMatch && (!catFilter || m.category === catFilter);
-  });
+  // Filtered + sorted list (featured items float to top)
+  const filtered = machines
+    .filter(m => {
+      const q = search.toLowerCase();
+      const textMatch = !q || [m.brand, m.name, m.model, m.category].some(v => (v||'').toLowerCase().includes(q));
+      const areaMatch = !areaFilter || (m.areas || '').split(',').map(a => a.trim()).includes(areaFilter);
+      return textMatch && (!catFilter || m.category === catFilter) && areaMatch;
+    })
+    .sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
 
   // Unique categories for filter
   const categories = [...new Set(machines.map(m => m.category).filter(Boolean))].sort();
+
+  // Unique area values (split comma-separated)
+  const allAreas = [...new Set(
+    machines.flatMap(m => (m.areas || '').split(',').map(a => a.trim()).filter(Boolean))
+  )].sort();
 
   function updateField(key, value) {
     setForm(f => ({ ...f, [key]: value }));
@@ -358,6 +367,10 @@ export default function MachinesPanel() {
               <option value="">All categories</option>
               {categories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+            <select className="filter-select" value={areaFilter} onChange={e => setAreaFilter(e.target.value)}>
+              <option value="">All areas</option>
+              {allAreas.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
             <button className="btn btn--ghost btn--sm" onClick={() => pullFromSheet(true)} title="Pull from Sheet">
               <i className="fa-solid fa-cloud-arrow-down" style={{ marginRight:5 }} />Pull
             </button>
@@ -377,10 +390,11 @@ export default function MachinesPanel() {
           <div className="table-wrap">
             <table>
               <thead><tr>
-                <th style={{ width:'40%' }}>Machine</th>
-                <th style={{ textAlign:'right' }}>Sale</th>
+                <th style={{ width:'35%' }}>Machine</th>
+                <th>Areas of Use</th>
+                <th style={{ textAlign:'right' }}>Sale Price</th>
                 <th style={{ width:32, textAlign:'center' }}>★</th>
-                <th style={{ width:50, textAlign:'center' }}>Buy</th>
+                <th style={{ width:80, textAlign:'center' }}>Payment Link</th>
                 <th style={{ width:116 }}>Actions</th>
               </tr></thead>
               <tbody>
@@ -403,8 +417,25 @@ export default function MachinesPanel() {
                           </div>
                         </div>
                       </td>
-                      <td style={{ textAlign:'right', fontFamily:'monospace', fontSize:'0.82rem', fontWeight:600 }}>
-                        {m.salePrice ? `€${parseFloat(m.salePrice).toFixed(2)}` : '—'}
+                      <td>
+                        <div className="size-chips">
+                          {(m.areas || '').split(',').map(a => a.trim()).filter(Boolean).map(a => (
+                            <span className="size-chip" key={a}
+                              style={{ cursor:'pointer' }}
+                              onClick={e => { e.stopPropagation(); setAreaFilter(prev => prev === a ? '' : a); }}
+                              title={areaFilter === a ? 'Clear filter' : `Filter by ${a}`}
+                            >{a}</span>
+                          ))}
+                          {!m.areas && <span style={{ color:'var(--muted)', fontSize:'0.75rem' }}>—</span>}
+                        </div>
+                      </td>
+                      <td style={{ textAlign:'right' }}>
+                        {m.salePrice
+                          ? <span className="size-chip" style={{ fontFamily:'monospace', fontWeight:700, fontSize:'0.85rem' }}>
+                              €{parseFloat(m.salePrice).toFixed(2)}
+                            </span>
+                          : <span style={{ color:'var(--muted)', fontSize:'0.75rem' }}>—</span>
+                        }
                       </td>
                       <td style={{ textAlign:'center', fontSize:'0.9rem', color:'var(--accent)' }}>
                         {m.featured ? '★' : ''}
@@ -412,7 +443,7 @@ export default function MachinesPanel() {
                       <td style={{ textAlign:'center' }} onClick={e => e.stopPropagation()}>
                         {m.stripeLink
                           ? <a href={m.stripeLink} target="_blank" rel="noreferrer"
-                              className="btn btn--ghost btn--sm btn--icon" title="Buy on Stripe">🛒</a>
+                              className="btn btn--ghost btn--sm btn--icon" title="Open payment link">🛒</a>
                           : <span style={{ color:'var(--muted)', fontSize:'0.75rem' }}>—</span>
                         }
                       </td>
@@ -585,19 +616,13 @@ export default function MachinesPanel() {
               </Card>
 
               {/* Specs */}
-              {(currentMachine.juraCoffees || currentMachine.areas || currentMachine.dailyOutput || currentMachine.stripeLink) && (
+              {(currentMachine.juraCoffees || currentMachine.areas || currentMachine.dailyOutput) && (
                 <Card icon="📐" title="Specs">
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom: currentMachine.areas ? 12 : 0 }}>
                     {currentMachine.juraCoffees && (
                       <div className="view-field">
                         <span className="view-field-label">Jura Coffees</span>
                         <span className="view-field-value">{currentMachine.juraCoffees}</span>
-                      </div>
-                    )}
-                    {currentMachine.areas && (
-                      <div className="view-field">
-                        <span className="view-field-label">Areas</span>
-                        <span className="view-field-value">{currentMachine.areas}</span>
                       </div>
                     )}
                     {currentMachine.dailyOutput && (
@@ -607,12 +632,23 @@ export default function MachinesPanel() {
                       </div>
                     )}
                   </div>
-                  {currentMachine.stripeLink && (
+                  {currentMachine.areas && (
                     <div>
-                      <div style={{ fontSize:'0.75rem', color:'var(--muted)', fontWeight:600, marginBottom:4 }}>Stripe Link</div>
-                      <LinkBar link={currentMachine.stripeLink} />
+                      <div style={{ fontSize:'0.75rem', color:'var(--muted)', fontWeight:600, marginBottom:6 }}>Areas of Use</div>
+                      <div className="size-chips">
+                        {currentMachine.areas.split(',').map(a => a.trim()).filter(Boolean).map(a => (
+                          <span className="size-chip" key={a}>{a}</span>
+                        ))}
+                      </div>
                     </div>
                   )}
+                </Card>
+              )}
+
+              {/* Payment Link */}
+              {currentMachine.stripeLink && (
+                <Card icon="💳" title="Stripe Payment Link">
+                  <LinkBar link={currentMachine.stripeLink} />
                 </Card>
               )}
             </div>
@@ -780,14 +816,24 @@ export default function MachinesPanel() {
                     <Field label="Jura Coffees">
                       <input className="input" value={form.juraCoffees} onChange={e => updateField('juraCoffees', e.target.value)} placeholder="e.g. 15" />
                     </Field>
-                    <Field label="Areas">
-                      <input className="input" value={form.areas} onChange={e => updateField('areas', e.target.value)} placeholder="e.g. Home, Small office" />
+                    <Field label="Daily Output">
+                      <input className="input" value={form.dailyOutput} onChange={e => updateField('dailyOutput', e.target.value)} placeholder="e.g. Up to 20 cups" />
                     </Field>
                   </div>
-                  <Field label="Daily Output">
-                    <input className="input" value={form.dailyOutput} onChange={e => updateField('dailyOutput', e.target.value)} placeholder="e.g. Up to 20 cups" />
+                  <Field label="Areas of Use" hint="Comma-separated — each value becomes a filterable pill. e.g. Home, Office, Small business">
+                    <input className="input" value={form.areas} onChange={e => updateField('areas', e.target.value)} placeholder="e.g. Home, Office, Hotel…" />
                   </Field>
-                  <Field label="Stripe Link">
+                  {form.areas && (
+                    <div className="size-chips" style={{ marginTop:6 }}>
+                      {form.areas.split(',').map(a => a.trim()).filter(Boolean).map(a => (
+                        <span className="size-chip" key={a}>{a}</span>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+
+                <Card icon="💳" title="Stripe Payment Link">
+                  <Field label="Payment URL" hint="Paste your Stripe payment or product link.">
                     <input className="input input--mono" value={form.stripeLink} onChange={e => updateField('stripeLink', e.target.value)} placeholder="https://buy.stripe.com/…" />
                   </Field>
                   {form.stripeLink && <LinkBar link={form.stripeLink} />}
