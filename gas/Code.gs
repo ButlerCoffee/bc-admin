@@ -977,31 +977,140 @@ function applyToRowBlog(row, post) {
 
 // ─── Blog Auto-translate (bidirectional via LanguageApp) ─────────────────────
 //
-// Google Translate handles plain text well but mangles HTML tags.
-// We strip HTML to plain text before translating so we always get a clean
-// result. The frontend switches to Markdown mode after any translation.
+// Strategy:
+//  • HTML source  → parse into typed blocks (h1–h4, p, li, blockquote, hr)
+//                   → batch-translate all text in ONE LanguageApp call, using
+//                     a separator that Google Translate passes through unchanged
+//                   → reassemble as Markdown (frontend is already in Markdown mode)
+//  • Markdown/plain source → split on double-newlines → same batch trick → rejoin
+//
+// This preserves headings, paragraphs, list items and blockquotes across
+// any language pair, instead of collapsing everything into one big paragraph.
 
-function stripHtmlForTranslation(s) {
-  // Replace block tags with newlines, inline tags with space, then collapse
-  return s
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<\/li>/gi, '\n')
-    .replace(/<\/h[1-6]>/gi, '\n\n')
-    .replace(/<\/blockquote>/gi, '\n')
+var TRANS_SEP = ' ||| '; // Google Translate reliably passes ||| through unchanged
+
+/** Strip inline HTML tags and decode common entities. */
+function stripInlineTags(s) {
+  return (s || '')
+    .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+    .replace(/&amp;/g,  '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ').trim();
 }
 
-function isHtmlString(s) { return /^\s*<[a-zA-Z]/.test(s); }
+function isHtmlString(s) { return /^\s*<[a-zA-Z]/.test(s || ''); }
+
+/**
+ * Parse HTML into an ordered array of { type, text } blocks.
+ * Types: 'h1' | 'h2' | 'h3' | 'h4' | 'p' | 'li' | 'bq' | 'hr'
+ * Nested matches (e.g. <p> inside <blockquote>) are skipped to avoid duplication.
+ */
+function parseHtmlBlocks(html) {
+  var h = (html || '').replace(/[ \t]+/g, ' ');
+
+  var matchers = [
+    { tag: 'h1',         type: 'h1' },
+    { tag: 'h2',         type: 'h2' },
+    { tag: 'h3',         type: 'h3' },
+    { tag: 'h4',         type: 'h4' },
+    { tag: 'li',         type: 'li' },
+    { tag: 'blockquote', type: 'bq' },
+    { tag: 'p',          type: 'p'  },
+  ];
+
+  var allMatches = [];
+
+  matchers.forEach(function(m) {
+    var re = new RegExp('<' + m.tag + '[^>]*>([\\s\\S]*?)<\\/' + m.tag + '>', 'gi');
+    var match;
+    while ((match = re.exec(h)) !== null) {
+      var text = stripInlineTags(match[1]);
+      if (text) {
+        allMatches.push({
+          index: match.index,
+          end:   match.index + match[0].length,
+          type:  m.type,
+          text:  text,
+        });
+      }
+    }
+  });
+
+  // HR is self-closing
+  var hrRe = /<hr[^>]*\/?>/gi, hrM;
+  while ((hrM = hrRe.exec(h)) !== null) {
+    allMatches.push({ index: hrM.index, end: hrM.index + hrM[0].length, type: 'hr', text: '' });
+  }
+
+  // Sort by document position; skip matches that fall inside an already-claimed range
+  allMatches.sort(function(a, b) { return a.index - b.index; });
+  var blocks = [], lastEnd = 0;
+  allMatches.forEach(function(m) {
+    if (m.index >= lastEnd) {
+      blocks.push({ type: m.type, text: m.text });
+      lastEnd = m.end;
+    }
+  });
+
+  // Fallback: no block elements found → treat whole thing as one paragraph
+  if (blocks.length === 0) {
+    var plain = stripInlineTags(h);
+    if (plain) blocks.push({ type: 'p', text: plain });
+  }
+
+  return blocks;
+}
+
+/**
+ * Translate an array of blocks in one LanguageApp call and return Markdown.
+ * HR blocks are passed through as '---'.
+ */
+function translateBlocksToMarkdown(blocks, from, to) {
+  if (!blocks.length) return '';
+
+  // Collect only translatable text and remember which block each piece belongs to
+  var texts    = [];
+  var blockIdx = [];
+  blocks.forEach(function(b, i) {
+    if (b.type !== 'hr' && b.text) { texts.push(b.text); blockIdx.push(i); }
+  });
+
+  var translatedTexts = [];
+  if (texts.length > 0) {
+    var joined     = texts.join(TRANS_SEP);
+    var translated = LanguageApp.translate(joined, from, to);
+    translatedTexts = translated.split(TRANS_SEP).map(function(t) { return t.trim(); });
+  }
+
+  return blocks.map(function(b, i) {
+    if (b.type === 'hr') return '---';
+    var pos  = blockIdx.indexOf(i);
+    var text = (pos >= 0 && translatedTexts[pos]) ? translatedTexts[pos] : b.text;
+    switch (b.type) {
+      case 'h1': return '# '   + text;
+      case 'h2': return '## '  + text;
+      case 'h3': return '### ' + text;
+      case 'h4': return '#### '+ text;
+      case 'li': return '- '   + text;
+      case 'bq': return '> '   + text;
+      default:   return text;
+    }
+  }).join('\n\n');
+}
+
+/**
+ * Translate plain-text / Markdown content while preserving paragraph breaks.
+ * Splits on double-newlines, batch-translates, rejoins.
+ */
+function translateMarkdownContent(content, from, to) {
+  var paras = (content || '').split(/\n\n+/).map(function(p) { return p.trim(); }).filter(Boolean);
+  if (!paras.length) return '';
+  if (paras.length === 1) return LanguageApp.translate(paras[0], from, to);
+  var joined     = paras.join(TRANS_SEP);
+  var translated = LanguageApp.translate(joined, from, to);
+  return translated.split(TRANS_SEP).map(function(p) { return p.trim(); }).filter(Boolean).join('\n\n');
+}
 
 function doTranslateBlog(body) {
   var from    = String(body.from    || 'en');
@@ -1010,16 +1119,20 @@ function doTranslateBlog(body) {
   var excerpt = String(body.excerpt || '');
   var content = String(body.content || '');
 
-  // Strip HTML → plain text so Google Translate doesn't garble tags
-  var plainContent = isHtmlString(content) ? stripHtmlForTranslation(content) : content;
-
   try {
+    var translatedContent = '';
+    if (content) {
+      translatedContent = isHtmlString(content)
+        ? translateBlocksToMarkdown(parseHtmlBlocks(content), from, to)
+        : translateMarkdownContent(content, from, to);
+    }
+
     return jsonOut({
       ok: true,
       data: {
-        title:   title        ? LanguageApp.translate(title,        from, to) : '',
-        excerpt: excerpt      ? LanguageApp.translate(excerpt,      from, to) : '',
-        content: plainContent ? LanguageApp.translate(plainContent, from, to) : '',
+        title:   title   ? LanguageApp.translate(title,   from, to) : '',
+        excerpt: excerpt ? LanguageApp.translate(excerpt, from, to) : '',
+        content: translatedContent,
       }
     });
   } catch(e) {
