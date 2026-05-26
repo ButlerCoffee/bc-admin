@@ -13,9 +13,11 @@
  *  GET  /exec                  → Coffee sheet
  *  GET  /exec?sheet=subs       → Subscription sheet
  *  GET  /exec?sheet=machines   → Machines sheet
+ *  GET  /exec?sheet=blog       → Blog sheet
  *  POST /exec                  → Coffee   (body.sheet undefined)
  *  POST /exec                  → Subs     (body.sheet === 'subs')
  *  POST /exec                  → Machines (body.sheet === 'machines')
+ *  POST /exec                  → Blog     (body.sheet === 'blog')
  */
 
 const SS_ID    = '1nT5v6u7pz8qv1cloSDT7GpDDfodXk1LID8rMeRkzIeY';
@@ -236,6 +238,7 @@ function doGet(e) {
   try {
     if (e && e.parameter && e.parameter.sheet === 'subs')     return doGetSubs();
     if (e && e.parameter && e.parameter.sheet === 'machines') return doGetMachines();
+    if (e && e.parameter && e.parameter.sheet === 'blog')     return doGetBlog();
     const sheet = getSheet();
     const data  = sheet.getDataRange().getValues();
     const coffees = [];
@@ -277,6 +280,13 @@ function doPost(e) {
       if (body.action === 'delete') return handleDeleteMachine(body.id);
       if (body.action === 'import') return handleImportMachines(body.machines);
       return jsonOut({ ok: false, error: 'Unknown machines action: ' + body.action });
+    }
+
+    // Route to Blog handlers
+    if (body.sheet === 'blog') {
+      if (body.action === 'save')   return handleSaveBlogPost(body.post);
+      if (body.action === 'delete') return handleDeleteBlogPost(body.id);
+      return jsonOut({ ok: false, error: 'Unknown blog action: ' + body.action });
     }
 
     // Coffee handlers (default)
@@ -872,4 +882,114 @@ function handleImportMachines(machines) {
   }
 
   return jsonOut({ ok: true, data: machines });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ── BLOG ─────────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//
+// Sheet "Blog" — row 1 is the header row. Structure:
+//   A: id  |  B: title  |  C: slug  |  D: status  |  E: content  |  F: updatedAt
+//
+// status values: 'draft' | 'published'
+// content: markdown text
+
+const BLOG_SHEET_NAME = 'Blog';
+
+const BL = {
+  ID:         0,   // A
+  TITLE:      1,   // B
+  SLUG:       2,   // C
+  STATUS:     3,   // D
+  CONTENT:    4,   // E
+  UPDATED_AT: 5,   // F
+};
+const TOTAL_COLS_BLOG = 6;
+
+function getSheetBlog() {
+  const ss    = SpreadsheetApp.openById(SS_ID);
+  const sheet = ss.getSheetByName(BLOG_SHEET_NAME);
+  if (!sheet) throw new Error('Blog sheet not found — please add a sheet named "Blog" with headers: id | title | slug | status | content | updatedAt');
+  return sheet;
+}
+
+function rowToAppBlog(row) {
+  return {
+    id:        String(row[BL.ID]         || ''),
+    title:     String(row[BL.TITLE]      || ''),
+    slug:      String(row[BL.SLUG]       || ''),
+    status:    String(row[BL.STATUS]     || 'draft'),
+    content:   String(row[BL.CONTENT]    || ''),
+    updatedAt: String(row[BL.UPDATED_AT] || ''),
+  };
+}
+
+function applyToRowBlog(row, post) {
+  if (post.id         !== undefined) row[BL.ID]         = post.id;
+  if (post.title      !== undefined) row[BL.TITLE]      = post.title;
+  if (post.slug       !== undefined) row[BL.SLUG]       = post.slug;
+  if (post.status     !== undefined) row[BL.STATUS]     = post.status;
+  if (post.content    !== undefined) row[BL.CONTENT]    = post.content;
+  if (post.updatedAt  !== undefined) row[BL.UPDATED_AT] = post.updatedAt;
+  return row;
+}
+
+// ─── Blog doGet ───────────────────────────────────────────────────────────────
+
+function doGetBlog() {
+  const sheet = getSheetBlog();
+  const data  = sheet.getDataRange().getValues();
+  const posts = [];
+
+  // Row 0 = header row → start at row index 1
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (String(row[BL.ID]).trim() === '') continue; // skip empty rows
+    posts.push(rowToAppBlog(row));
+  }
+
+  // Return all posts (admin sees drafts too); sort newest-first
+  posts.sort(function(a, b) {
+    return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
+  });
+
+  return jsonOut({ ok: true, data: posts });
+}
+
+// ─── Blog Save (create or update) ─────────────────────────────────────────────
+
+function handleSaveBlogPost(post) {
+  const sheet = getSheetBlog();
+  const data  = sheet.getDataRange().getValues();
+
+  // Update existing post
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][BL.ID]) === String(post.id)) {
+      const row = ensureRowLength(copyRow(data[i]), TOTAL_COLS_BLOG);
+      applyToRowBlog(row, post);
+      sheet.getRange(i + 1, 1, 1, TOTAL_COLS_BLOG).setValues([row]);
+      return jsonOut({ ok: true, data: rowToAppBlog(row) });
+    }
+  }
+
+  // New post
+  const newRow = new Array(TOTAL_COLS_BLOG).fill('');
+  applyToRowBlog(newRow, post);
+  sheet.appendRow(newRow);
+  return jsonOut({ ok: true, data: rowToAppBlog(newRow) });
+}
+
+// ─── Blog Delete ──────────────────────────────────────────────────────────────
+
+function handleDeleteBlogPost(id) {
+  const sheet = getSheetBlog();
+  const data  = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][BL.ID]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return jsonOut({ ok: true, data: { deleted: id } });
+    }
+  }
+  return jsonOut({ ok: false, error: 'Post not found for id: ' + id });
 }

@@ -20,8 +20,7 @@ import {
 import MachinesPanel      from './MachinesPanel.jsx';
 import SubscriptionPanel  from './SubscriptionPanel.jsx';
 import LabelsPanel        from './LabelsPanel.jsx';
-import BlogIndex          from './pages/BlogIndex.jsx';
-import BlogPost           from './pages/BlogPost.jsx';
+import BlogPanel          from './BlogPanel.jsx';
 import { CoffeeProvider } from './CoffeeContext.jsx';
 
 // ── Auth guard — redirects to login if not authenticated ──────────────────────
@@ -166,9 +165,10 @@ const router = createBrowserRouter([
           { path: 'subscription/*', element: <SubscriptionPanel /> },
 
           // Other
-          { path: 'labels',      element: <LabelsPanel /> },
-          { path: 'blog',        element: <BlogIndex /> },
-          { path: 'blog/:slug',  element: <BlogPost /> },
+          { path: 'labels',  element: <LabelsPanel /> },
+
+          // Blog (wildcard keeps component alive — no remount)
+          { path: 'blog/*',  element: <BlogPanel /> },
         ],
       },
 
