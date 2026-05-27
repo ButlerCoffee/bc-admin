@@ -294,22 +294,59 @@ function RichTextEditor({ value, onChange, resetKey, placeholder = 'Start writin
   );
 }
 
-// ── Markdown editor (plain textarea) ─────────────────────────────────────────
-function MarkdownTextarea({ value, onChange, placeholder, minH = 300 }) {
+// ── Markdown editor — Write tab (raw) + Preview tab (rendered) ───────────────
+function MarkdownEditor({ value, onChange, placeholder, minH = 300 }) {
+  const [tab, setTab] = useState('write');
   const txt = value || '';
   const wc  = txt.split(/\s+/).filter(Boolean).length;
   return (
     <div style={{ border:'1px solid var(--border)', borderRadius:'var(--r)', overflow:'hidden' }}>
-      <textarea
-        className="textarea-input"
-        value={txt}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={{ minHeight:minH, borderRadius:0, border:'none', resize:'vertical', fontFamily:'monospace', fontSize:'0.87rem', lineHeight:1.7, padding:'16px' }}
-      />
+      {/* Sub-tab bar */}
+      <div style={{ display:'flex', alignItems:'center', gap:2, padding:'4px 8px', background:'var(--bg)', borderBottom:'1px solid var(--border)' }}>
+        {[['write','fa-pen','Write'],['preview','fa-eye','Preview']].map(([t, icon, label]) => (
+          <button key={t} type="button" onClick={() => setTab(t)} style={{
+            padding:'2px 10px', borderRadius:4, border:'none', cursor:'pointer',
+            background: tab === t ? 'var(--card)' : 'transparent',
+            color:      tab === t ? 'var(--text)' : 'var(--muted)',
+            fontWeight: tab === t ? 700 : 400,
+            fontSize:'0.73rem',
+            boxShadow:  tab === t ? '0 1px 3px rgba(0,0,0,0.07)' : 'none',
+          }}>
+            <i className={`fa-solid ${icon}`} style={{ marginRight:4, fontSize:'0.7rem' }} />{label}
+          </button>
+        ))}
+        <span style={{ marginLeft:'auto', fontSize:'0.68rem', color:'var(--muted)', opacity:0.65, fontFamily:'monospace' }}>
+          **bold** · *italic* · # H1 · ## H2 · - list · &gt; quote · ---
+        </span>
+      </div>
+
+      {/* Write */}
+      {tab === 'write' && (
+        <textarea
+          className="textarea-input"
+          value={txt}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={{ minHeight:minH, borderRadius:0, border:'none', resize:'vertical',
+                   fontFamily:'monospace', fontSize:'0.87rem', lineHeight:1.7, padding:'16px',
+                   display:'block', width:'100%', boxSizing:'border-box' }}
+        />
+      )}
+
+      {/* Preview */}
+      {tab === 'preview' && (
+        <div className="bhtml"
+          style={{ minHeight:minH, padding:'18px 20px', fontSize:'0.93rem', lineHeight:1.82, color:'var(--text)' }}
+          dangerouslySetInnerHTML={{ __html:
+            renderMarkdown(txt) ||
+            `<p style="color:var(--muted);font-style:italic">${placeholder || 'Nothing to preview yet.'}</p>`
+          }}
+        />
+      )}
+
+      {/* Footer */}
       <div style={{ padding:'4px 12px', background:'var(--bg)', borderTop:'1px solid var(--border)', fontSize:'0.72rem', color:'var(--muted)', display:'flex', gap:16 }}>
         <span>{wc} words</span><span>{txt.length} chars</span>
-        <span style={{ marginLeft:'auto', opacity:0.7 }}>**bold** · *italic* · # Heading · - list · &gt; quote · ---</span>
       </div>
     </div>
   );
@@ -329,7 +366,7 @@ function ContentEditor({ value, onChange, mode, onModeChange, resetKey, placehol
       </div>
       {mode === 'wysiwyg'
         ? <RichTextEditor value={value} onChange={onChange} resetKey={`${resetKey}-v`} placeholder={placeholder} minH={minH} />
-        : <MarkdownTextarea value={value} onChange={onChange} placeholder={placeholder} minH={minH} />
+        : <MarkdownEditor value={value} onChange={onChange} placeholder={placeholder} minH={minH} />
       }
     </div>
   );
@@ -697,13 +734,6 @@ export default function BlogPanel() {
             </button>
           </div>
 
-          <div style={{ display:'flex', flexWrap:'wrap', gap:12, padding:'10px 0 20px', borderBottom:'1px solid var(--border)', marginBottom:28, fontSize:'0.78rem', color:'var(--muted)' }}>
-            <span><i className="fa-regular fa-clock" style={{ marginRight:4 }} />{formatDate(currentPost.updatedAt)}</span>
-            {currentPost.author   && <span><i className="fa-regular fa-user" style={{ marginRight:4 }} />{currentPost.author}</span>}
-            {currentPost.category && <span><i className="fa-solid fa-folder" style={{ marginRight:4 }} />{currentPost.category}</span>}
-            <span style={{ fontFamily:'monospace', fontSize:'0.72rem' }}>/blog/{currentPost.slug}</span>
-          </div>
-
           <div style={{ maxWidth:720 }}>
             {currentPost.imageUrl && (
               <div style={{ marginBottom:28, borderRadius:'var(--r)', overflow:'hidden', border:'1px solid var(--border)' }}>
@@ -724,10 +754,18 @@ export default function BlogPanel() {
             </h2>
 
             {viewExcerpt() && (
-              <p style={{ fontSize:'1.02rem', lineHeight:1.65, color:'var(--muted)', fontStyle:'italic', margin:'0 0 28px', paddingBottom:20, borderBottom:'1px solid var(--border)' }}>
+              <p style={{ fontSize:'1.02rem', lineHeight:1.65, color:'var(--muted)', fontStyle:'italic', margin:'0 0 20px' }}>
                 {viewExcerpt()}
               </p>
             )}
+
+            {/* Metadata — date · author · category · slug */}
+            <div style={{ display:'flex', flexWrap:'wrap', gap:12, fontSize:'0.76rem', color:'var(--muted)', marginBottom:20, paddingBottom:20, borderBottom:'1px solid var(--border)' }}>
+              <span><i className="fa-regular fa-clock" style={{ marginRight:4 }} />{formatDate(currentPost.updatedAt)}</span>
+              {currentPost.author   && <span><i className="fa-regular fa-user"   style={{ marginRight:4 }} />{currentPost.author}</span>}
+              {currentPost.category && <span><i className="fa-solid fa-folder"   style={{ marginRight:4 }} />{currentPost.category}</span>}
+              <span style={{ fontFamily:'monospace', fontSize:'0.7rem' }}>/blog/{currentPost.slug}</span>
+            </div>
 
             <div className="bhtml" style={{ fontSize:'0.93rem', color:'var(--text)' }}
               dangerouslySetInnerHTML={{ __html: renderContent(viewBody()) || '<p style="color:var(--muted);font-style:italic">No content yet.</p>' }}
