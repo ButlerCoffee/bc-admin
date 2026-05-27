@@ -22,6 +22,39 @@ import { toSlug } from './CoffeeContext.jsx';
 // ── Detect content format ─────────────────────────────────────────────────────
 function isHtml(s) { return /^\s*<[a-zA-Z]/.test(s || ''); }
 
+// ── HTML → Markdown converter (used when toggling editor mode) ────────────────
+function htmlToMd(html) {
+  if (!html) return '';
+  if (!isHtml(html)) return html; // already markdown/plain text — pass through
+  let s = html;
+  // Block elements
+  s = s.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '\n\n# $1\n\n');
+  s = s.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '\n\n## $1\n\n');
+  s = s.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '\n\n### $1\n\n');
+  s = s.replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, '\n\n#### $1\n\n');
+  s = s.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '\n- $1');
+  s = s.replace(/<\/?(?:ul|ol)[^>]*>/gi, '\n');
+  s = s.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, '\n\n> $1\n\n');
+  s = s.replace(/<hr[^>]*\/?>/gi, '\n\n---\n\n');
+  s = s.replace(/<\/(?:p|div|section|article)>/gi, '\n\n');
+  s = s.replace(/<(?:p|div|section|article)[^>]*>/gi, '');
+  s = s.replace(/<br\s*\/?>/gi, '\n');
+  // Inline formatting
+  s = s.replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**');
+  s = s.replace(/<b[^>]*>([\s\S]*?)<\/b>/gi, '**$1**');
+  s = s.replace(/<em[^>]*>([\s\S]*?)<\/em>/gi, '*$1*');
+  s = s.replace(/<i[^>]*>([\s\S]*?)<\/i>/gi, '*$1*');
+  s = s.replace(/<s[^>]*>([\s\S]*?)<\/s>/gi, '~~$1~~');
+  s = s.replace(/<u[^>]*>([\s\S]*?)<\/u>/gi, '$1');
+  s = s.replace(/<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)');
+  s = s.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`');
+  // Strip any remaining tags, decode entities, clean up whitespace
+  s = s.replace(/<[^>]+>/g, '');
+  s = s.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&nbsp;/g,' ').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+  s = s.replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+  return s;
+}
+
 // ── Google Drive URL normalizer ───────────────────────────────────────────────
 // Converts share/view links to the thumbnail format that works as <img src>.
 // e.g. https://drive.google.com/file/d/FILE_ID/view  →  thumbnail URL
@@ -354,13 +387,20 @@ function MarkdownEditor({ value, onChange, placeholder, minH = 300 }) {
 
 // ── Content editor with Visual / Markdown toggle ──────────────────────────────
 function ContentEditor({ value, onChange, mode, onModeChange, resetKey, placeholder, minH = 300 }) {
+  function handleModeChange(newMode) {
+    // Switching to Markdown while content is HTML → auto-convert so user sees clean MD, not raw tags
+    if (newMode === 'markdown' && isHtml(value)) {
+      onChange(htmlToMd(value));
+    }
+    onModeChange(newMode);
+  }
   return (
     <div>
       <div className="ed-toggle">
-        <button type="button" className={`ed-toggle__btn${mode === 'wysiwyg'   ? ' ed-toggle__btn--active' : ''}`} onClick={() => onModeChange('wysiwyg')}>
+        <button type="button" className={`ed-toggle__btn${mode === 'wysiwyg'   ? ' ed-toggle__btn--active' : ''}`} onClick={() => handleModeChange('wysiwyg')}>
           <i className="fa-solid fa-wand-magic-sparkles" style={{ marginRight:4 }} />Visual
         </button>
-        <button type="button" className={`ed-toggle__btn${mode === 'markdown'  ? ' ed-toggle__btn--active' : ''}`} onClick={() => onModeChange('markdown')}>
+        <button type="button" className={`ed-toggle__btn${mode === 'markdown'  ? ' ed-toggle__btn--active' : ''}`} onClick={() => handleModeChange('markdown')}>
           <i className="fa-solid fa-hashtag" style={{ marginRight:4 }} />Markdown
         </button>
       </div>
@@ -438,9 +478,9 @@ export default function BlogPanel() {
     if (currentSlug && !post) return;
     setForm(post ? { ...emptyPost, ...post } : { ...emptyPost });
     setSlugManual(Boolean(post?.slug));
-    // Auto-detect editor mode from saved content format
-    setModeEN(isHtml(post?.content_en) || !post?.content_en ? 'wysiwyg' : 'markdown');
-    setModeES(isHtml(post?.content_es) || !post?.content_es ? 'wysiwyg' : 'markdown');
+    // Default to Markdown. Only switch to Visual if the saved content is HTML.
+    setModeEN(isHtml(post?.content_en) ? 'wysiwyg' : 'markdown');
+    setModeES(isHtml(post?.content_es) ? 'wysiwyg' : 'markdown');
     setResetEN(c => c + 1);
     setResetES(c => c + 1);
     formKeyRef.current = key;
@@ -719,22 +759,24 @@ export default function BlogPanel() {
                 </span>
               )}
             </div>
-            {hasSpanish && (
-              <div style={{ display:'flex', gap:4 }}>
-                {[['en','🇨🇦 EN'],['es','🇪🇸 ES']].map(([l,lbl]) => (
-                  <button key={l} type="button" onClick={() => setViewLang(l)} style={{
-                    padding:'3px 10px', borderRadius:4, border:'1px solid var(--border)', cursor:'pointer',
-                    background: viewLang === l ? 'var(--yellow)' : 'transparent', fontWeight:700, fontSize:'0.72rem',
-                  }}>{lbl}</button>
-                ))}
-              </div>
-            )}
             <button className="btn btn--ghost btn--sm" onClick={() => openForm(currentPost.slug)}>
               <i className="fa-regular fa-pen-to-square" style={{ marginRight:5 }} />Edit
             </button>
           </div>
 
-          <div style={{ maxWidth:720 }}>
+          <div style={{ maxWidth:720, margin:'0 auto' }}>
+            {hasSpanish && (
+              <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:16 }}>
+                <div style={{ display:'flex', gap:4 }}>
+                  {[['en','🇨🇦 EN'],['es','🇪🇸 ES']].map(([l,lbl]) => (
+                    <button key={l} type="button" onClick={() => setViewLang(l)} style={{
+                      padding:'3px 10px', borderRadius:4, border:'1px solid var(--border)', cursor:'pointer',
+                      background: viewLang === l ? 'var(--yellow)' : 'transparent', fontWeight:700, fontSize:'0.72rem',
+                    }}>{lbl}</button>
+                  ))}
+                </div>
+              </div>
+            )}
             {currentPost.imageUrl && (
               <div style={{ marginBottom:28, borderRadius:'var(--r)', overflow:'hidden', border:'1px solid var(--border)' }}>
                 <img src={normalizeDriveUrl(currentPost.imageUrl)} alt={currentPost.imageAlt || currentPost.title_en}
