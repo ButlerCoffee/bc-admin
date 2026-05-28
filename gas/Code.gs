@@ -3,7 +3,7 @@
  * Spreadsheet: https://docs.google.com/spreadsheets/d/1nT5v6u7pz8qv1cloSDT7GpDDfodXk1LID8rMeRkzIeY
  *
  * DEPLOY:
- *  1. Open Extensions → Apps Script in the spreadsheet
+ *  1.  Open Extensions → Apps Script in the spreadsheet
  *  2. Paste this entire file, replacing any existing code
  *  3. Deploy → Manage Deployments → Edit (pencil icon on your existing deployment)
  *     - Create a new version, click Deploy — the URL stays the same
