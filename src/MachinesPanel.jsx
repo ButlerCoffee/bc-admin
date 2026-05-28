@@ -1,6 +1,13 @@
 /**
- * MachinesPanel — content-only component for the Machines catalogue.
- * Rendered inside App.jsx's sidebar + main layout when panel === 'machines'.
+ * MachinesPanel — full CRUD for the Machines catalogue.
+ * Mounted at route `butlercoffee/machines/*` (wildcard keeps the component
+ * alive across list / view / form navigation — no remount, no data refetch).
+ *
+ * URL scheme:
+ *   /butlercoffee/machines            → list
+ *   /butlercoffee/machines/new        → new-machine form
+ *   /butlercoffee/machines/:id        → view
+ *   /butlercoffee/machines/:id/edit   → edit form
  *
  * Images: upload manually to Drive, paste URL here (same system as Sub Levels).
  * Up to 6 images per machine. Drive folder for images:
@@ -9,7 +16,8 @@
  * Columns 11 (Profit) and 12 (Margin) in the Machines sheet are formula cells —
  * the GAS backend never overwrites them; we just read them back for display.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { apiCall } from './lib/api.js';
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
@@ -232,18 +240,56 @@ function ImageGrid({ form, updateField }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MachinesPanel() {
+  // ── URL routing ────────────────────────────────────────────────────────────
+  const { '*': splat = '' } = useParams();
+  const navigate = useNavigate();
+
+  // Derive mode from URL splat
+  // splat examples: '' → list | 'new' → form(new) | 'abc123' → view | 'abc123/edit' → form(edit)
+  const splatParts  = splat.split('/').filter(Boolean);
+  const isNew       = splatParts[0] === 'new';
+  const isEdit      = splatParts[1] === 'edit';
+  const urlId       = (!isNew && splatParts[0]) ? splatParts[0] : null;
+  const mode        = !splatParts[0] ? 'list' : isNew ? 'form' : isEdit ? 'form' : 'view';
+  const currentId   = urlId;
+
+  // Navigation helpers
+  function openView(id)        { navigate(`/butlercoffee/machines/${id}`); }
+  function openForm(id = null) { navigate(id ? `/butlercoffee/machines/${id}/edit` : '/butlercoffee/machines/new'); }
+  function backToList()        { navigate('/butlercoffee/machines'); }
+
+  // ── Data state ─────────────────────────────────────────────────────────────
   const [machines,  setMachines]  = useState([]);
   const [loading,   setLoading]   = useState(false);
   const [toasts,    setToasts]    = useState([]);
-  const [mode,      setMode]      = useState('list'); // 'list' | 'view' | 'form'
-  const [currentId, setCurrentId] = useState(null);
   const [form,      setForm]      = useState(emptyMachine);
   const [search,      setSearch]      = useState('');
   const [catFilter,   setCatFilter]   = useState('');
   const [areaFilter,  setAreaFilter]  = useState('');
-  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [pendingDeleteId,   setPendingDeleteId]   = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
+  // ── Form initialization ────────────────────────────────────────────────────
+  // Track which ID the form was last initialized for so we don't reset mid-edit.
+  const formKeyRef = useRef('');
+
+  useEffect(() => {
+    if (mode !== 'form') { formKeyRef.current = ''; return; }
+    const key = currentId || 'new';
+    if (formKeyRef.current === key) return; // already initialized for this key
+
+    // If editing and machines haven't loaded yet, wait (effect re-runs when machines changes)
+    if (currentId && machines.length === 0) return;
+
+    const machine = currentId ? machines.find(m => m.id === currentId) : null;
+    if (currentId && !machine) return; // ID not found yet — still loading
+
+    setForm(machine ? { ...emptyMachine, ...machine } : { ...emptyMachine });
+    formKeyRef.current = key;
+    window.scrollTo(0, 0);
+  }, [mode, currentId, machines]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── API calls ──────────────────────────────────────────────────────────────
   function toast(msg, type = 'success') {
     const id = Date.now() + Math.random();
     setToasts(t => [...t, { id, msg, type }]);
@@ -273,9 +319,9 @@ export default function MachinesPanel() {
     } finally { setLoading(false); }
   }
 
-  useEffect(() => { pullFromSheet(); }, []);
+  useEffect(() => { pullFromSheet(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filtered + sorted list (featured items float to top)
+  // ── Derived list ───────────────────────────────────────────────────────────
   const filtered = machines
     .filter(m => {
       const q = search.toLowerCase();
@@ -285,36 +331,15 @@ export default function MachinesPanel() {
     })
     .sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
 
-  // Unique categories for filter
   const categories = [...new Set(machines.map(m => m.category).filter(Boolean))].sort();
 
-  // Unique area values (split comma-separated)
   const allAreas = [...new Set(
     machines.flatMap(m => (m.areas || '').split(',').map(a => a.trim()).filter(Boolean))
   )].sort();
 
+  // ── Form helpers ───────────────────────────────────────────────────────────
   function updateField(key, value) {
     setForm(f => ({ ...f, [key]: value }));
-  }
-
-  function openView(id) {
-    setCurrentId(id);
-    setMode('view');
-    window.scrollTo(0, 0);
-  }
-
-  function openForm(id = null) {
-    const machine = id ? machines.find(m => m.id === id) : null;
-    setCurrentId(id);
-    setForm(machine ? { ...emptyMachine, ...machine } : { ...emptyMachine });
-    setMode('form');
-    window.scrollTo(0, 0);
-  }
-
-  function closeForm() {
-    setMode('list');
-    setCurrentId(null);
-    setForm(emptyMachine);
   }
 
   async function saveMachine(e) {
@@ -329,7 +354,7 @@ export default function MachinesPanel() {
           : [saved, ...prev]
       );
       toast('Machine saved!', 'success');
-      closeForm();
+      navigate(`/butlercoffee/machines/${saved.id}`); // go to view after save
     } catch (err) { toast(`Save failed — ${err.message}`, 'error'); }
     finally { setLoading(false); }
   }
@@ -343,13 +368,13 @@ export default function MachinesPanel() {
     try {
       await apiCall('POST', { action: 'delete', id }, 'machines');
       setMachines(prev => prev.filter(m => m.id !== id));
-      if (currentId) closeForm();
+      navigate('/butlercoffee/machines'); // go to list after delete
       toast('Machine deleted.', 'error');
     } catch (err) { toast(`Delete failed — ${err.message}`, 'error'); }
     finally { setLoading(false); }
   }
 
-  const currentMachine = machines.find(m => m.id === currentId);
+  const currentMachine = currentId ? machines.find(m => m.id === currentId) : null;
 
   return (
     <>
@@ -474,7 +499,7 @@ export default function MachinesPanel() {
       {mode === 'view' && currentMachine && (
         <div className="view-panel">
           <div className="form-header">
-            <button className="form-header__back" onClick={closeForm}>← Back</button>
+            <button className="form-header__back" onClick={backToList}>← Back</button>
             <h1 className="form-header__title">{currentMachine.brand} {currentMachine.name}</h1>
             <button className="btn btn--ghost btn--sm" style={{ marginLeft:'auto' }} onClick={() => openForm(currentMachine.id)}>✏️ Edit</button>
           </div>
@@ -657,11 +682,22 @@ export default function MachinesPanel() {
         </div>
       )}
 
+      {/* View: loading state (navigated directly to a URL before data loaded) */}
+      {mode === 'view' && !currentMachine && !loading && (
+        <div className="empty-state" style={{ padding:'60px 24px' }}>
+          <div className="empty-state__icon">⚙️</div>
+          <div className="empty-state__title">Machine not found</div>
+          <div className="empty-state__text">
+            <button className="btn btn--ghost btn--sm" onClick={backToList}>← Back to list</button>
+          </div>
+        </div>
+      )}
+
       {/* ── Form ──────────────────────────────────────────────────────────────── */}
       {mode === 'form' && (
         <div id="form-panel" className="form-panel active">
           <div className="form-header">
-            <button className="form-header__back" onClick={closeForm}>← Back</button>
+            <button className="form-header__back" onClick={backToList}>← Back</button>
             <h1 className="form-header__title">{currentId ? 'Edit Machine' : 'New Machine'}</h1>
           </div>
 
@@ -849,7 +885,7 @@ export default function MachinesPanel() {
                 : <div />
               }
               <div style={{ flex:1 }} />
-              <button type="button" className="btn btn--ghost btn--sm" onClick={closeForm}>Cancel</button>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={backToList}>Cancel</button>
               <button type="submit" className="btn btn--primary">Save Machine</button>
             </div>
           </form>

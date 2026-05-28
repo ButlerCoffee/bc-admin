@@ -1,38 +1,69 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { createRoot } from 'react-dom/client';
+import {
+  createBrowserRouter,
+  RouterProvider,
+  Navigate,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 import './styles.css';
 
 import { AuthProvider, useAuth } from './AuthContext.jsx';
 import LoginPage          from './LoginPage.jsx';
 import LandingPage        from './LandingPage.jsx';
 import App                from './App.jsx';
-// ── Mobile bottom nav + menu sheet ────────────────────────────────────────────
-function MobileNav({ currentApp, setCurrentApp }) {
+import {
+  CoffeeList, CoffeeView, CoffeeForm, HomePanel,
+} from './App.jsx';
+import MachinesPanel      from './MachinesPanel.jsx';
+import SubscriptionPanel  from './SubscriptionPanel.jsx';
+import LabelsPanel        from './LabelsPanel.jsx';
+import BlogPanel          from './BlogPanel.jsx';
+import FaqPanel           from './FaqPanel.jsx';
+import { CoffeeProvider } from './CoffeeContext.jsx';
+
+// ── Auth guard — redirects to login if not authenticated ──────────────────────
+function RequireAuth({ children }) {
+  const { user } = useAuth();
+  if (user === undefined) {
+    return (
+      <div className="loading-overlay" style={{ display: 'flex' }}>
+        <div className="loading-spinner" />
+      </div>
+    );
+  }
+  if (!user) return <LoginPage />;
+  return children;
+}
+
+// ── Mobile bottom nav ─────────────────────────────────────────────────────────
+function MobileNav() {
   const { user, logout } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const [menuOpen, setMenuOpen] = React.useState(false);
+
+  const inCoffee = location.pathname.startsWith('/butlercoffee');
+  const atHub    = !inCoffee;
 
   function closeMenu() { setMenuOpen(false); }
 
-  function goTo(app) {
-    setCurrentApp(app);
-    closeMenu();
-  }
-
   return (
     <>
-      {/* Bottom tab bar */}
       <nav className="mobile-nav">
         <button
-          className={`mobile-nav__item${!currentApp ? ' mobile-nav__item--active' : ''}`}
-          onClick={() => goTo(null)}
+          className={`mobile-nav__item${atHub ? ' mobile-nav__item--active' : ''}`}
+          onClick={() => { navigate('/'); closeMenu(); }}
         >
           <span className="mobile-nav__icon"><i className="fa-solid fa-house" /></span>
           <span className="mobile-nav__label">Home</span>
         </button>
 
         <button
-          className={`mobile-nav__item${currentApp === 'coffee' ? ' mobile-nav__item--active' : ''}`}
-          onClick={() => goTo('coffee')}
+          className={`mobile-nav__item${inCoffee ? ' mobile-nav__item--active' : ''}`}
+          onClick={() => { navigate('/butlercoffee'); closeMenu(); }}
         >
           <span className="mobile-nav__icon"><i className="fa-solid fa-mug-hot" /></span>
           <span className="mobile-nav__label">Coffee</span>
@@ -40,8 +71,8 @@ function MobileNav({ currentApp, setCurrentApp }) {
 
         <button
           className="mobile-nav__item mobile-nav__item--soon"
-          title="Coming soon"
           disabled
+          title="Coming soon"
         >
           <span className="mobile-nav__icon"><i className="fa-solid fa-code" /></span>
           <span className="mobile-nav__label">App Dev</span>
@@ -56,12 +87,10 @@ function MobileNav({ currentApp, setCurrentApp }) {
         </button>
       </nav>
 
-      {/* Menu bottom sheet */}
       {menuOpen && (
         <div className="mobile-menu-overlay" onClick={closeMenu}>
           <div className="mobile-menu" onClick={e => e.stopPropagation()}>
             <div className="mobile-menu__handle" />
-
             <div className="mobile-menu__account">
               <div className="mobile-menu__avatar">
                 {user?.email?.[0]?.toUpperCase() || '?'}
@@ -71,14 +100,12 @@ function MobileNav({ currentApp, setCurrentApp }) {
                 <div className="mobile-menu__org">Butler Society, S.L.</div>
               </div>
             </div>
-
             <div className="mobile-menu__divider" />
-
-            <button className="mobile-menu__item" onClick={() => { goTo(null); }}>
+            <button className="mobile-menu__item" onClick={() => { navigate('/'); closeMenu(); }}>
               <span className="mobile-menu__item-icon"><i className="fa-solid fa-house" /></span>
               <span>Butler Society Hub</span>
             </button>
-            <button className="mobile-menu__item" onClick={() => { goTo('coffee'); }}>
+            <button className="mobile-menu__item" onClick={() => { navigate('/butlercoffee'); closeMenu(); }}>
               <span className="mobile-menu__item-icon"><i className="fa-solid fa-mug-hot" /></span>
               <span>Butler Coffee</span>
             </button>
@@ -88,7 +115,6 @@ function MobileNav({ currentApp, setCurrentApp }) {
               <span className="nav-link__badge" style={{ marginLeft:'auto' }}>soon</span>
             </button>
             <div className="mobile-menu__divider" />
-
             <button className="mobile-menu__item mobile-menu__item--danger" onClick={logout}>
               <span className="mobile-menu__item-icon"><i className="fa-solid fa-right-from-bracket" /></span>
               <span>Sign out</span>
@@ -100,38 +126,64 @@ function MobileNav({ currentApp, setCurrentApp }) {
   );
 }
 
-// ── Top-level router ──────────────────────────────────────────────────────────
-function Root() {
-  const { user } = useAuth();
-  const [currentApp, setCurrentApp] = useState(null);
-
-  if (user === undefined) {
-    return (
-      <div className="loading-overlay" style={{ display: 'flex' }}>
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
-
-  if (!user) return <LoginPage />;
-
-  const backToHub = () => setCurrentApp(null);
-
+// ── Root layout — auth guard + mobile nav ─────────────────────────────────────
+function RootLayout() {
   return (
-    <>
-      {currentApp === 'coffee'
-        ? <App onBackToHub={backToHub} />
-        : <LandingPage onEnterApp={setCurrentApp} />
-      }
-      <MobileNav currentApp={currentApp} setCurrentApp={setCurrentApp} />
-    </>
+    <RequireAuth>
+      <Outlet />
+      <MobileNav />
+    </RequireAuth>
   );
 }
 
+// ── Route tree ────────────────────────────────────────────────────────────────
+const router = createBrowserRouter([
+  {
+    element: <AuthProvider><RootLayout /></AuthProvider>,
+    children: [
+      { index: true, element: <LandingPage /> },
+
+      {
+        path: 'butlercoffee',
+        element: (
+          <CoffeeProvider>
+            <App />
+          </CoffeeProvider>
+        ),
+        children: [
+          { index: true,             element: <HomePanel /> },
+
+          // Coffee
+          { path: 'coffee',          element: <CoffeeList /> },
+          { path: 'coffee/new',      element: <CoffeeForm /> },
+          { path: 'coffee/:id',      element: <CoffeeView /> },
+          { path: 'coffee/:id/edit', element: <CoffeeForm /> },
+
+          // Machines (wildcard keeps component alive across list/view/form — no remount)
+          { path: 'machines/*', element: <MachinesPanel /> },
+
+          // Subscription (wildcard keeps component alive — no remount)
+          { path: 'subscription/*', element: <SubscriptionPanel /> },
+
+          // Other
+          { path: 'labels',  element: <LabelsPanel /> },
+
+          // Blog (wildcard keeps component alive — no remount)
+          { path: 'blog/*',  element: <BlogPanel /> },
+
+          // FAQ (wildcard keeps component alive — no remount)
+          { path: 'faq/*',   element: <FaqPanel /> },
+        ],
+      },
+
+      // Catch-all
+      { path: '*', element: <Navigate to="/" replace /> },
+    ],
+  },
+]);
+
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <AuthProvider>
-      <Root />
-    </AuthProvider>
+    <RouterProvider router={router} />
   </React.StrictMode>
 );

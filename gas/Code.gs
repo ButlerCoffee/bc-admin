@@ -13,9 +13,11 @@
  *  GET  /exec                  → Coffee sheet
  *  GET  /exec?sheet=subs       → Subscription sheet
  *  GET  /exec?sheet=machines   → Machines sheet
+ *  GET  /exec?sheet=blog       → Blog sheet
  *  POST /exec                  → Coffee   (body.sheet undefined)
  *  POST /exec                  → Subs     (body.sheet === 'subs')
  *  POST /exec                  → Machines (body.sheet === 'machines')
+ *  POST /exec                  → Blog     (body.sheet === 'blog')
  */
 
 const SS_ID    = '1nT5v6u7pz8qv1cloSDT7GpDDfodXk1LID8rMeRkzIeY';
@@ -236,6 +238,7 @@ function doGet(e) {
   try {
     if (e && e.parameter && e.parameter.sheet === 'subs')     return doGetSubs();
     if (e && e.parameter && e.parameter.sheet === 'machines') return doGetMachines();
+    if (e && e.parameter && e.parameter.sheet === 'blog')     return doGetBlog();
     const sheet = getSheet();
     const data  = sheet.getDataRange().getValues();
     const coffees = [];
@@ -277,6 +280,15 @@ function doPost(e) {
       if (body.action === 'delete') return handleDeleteMachine(body.id);
       if (body.action === 'import') return handleImportMachines(body.machines);
       return jsonOut({ ok: false, error: 'Unknown machines action: ' + body.action });
+    }
+
+    // Route to Blog handlers
+    if (body.sheet === 'blog') {
+      if (body.action === 'save')        return handleSaveBlogPost(body.post);
+      if (body.action === 'delete')      return handleDeleteBlogPost(body.id);
+      if (body.action === 'translate')   return doTranslateBlog(body);
+      if (body.action === 'uploadImage') return handleUploadImage(body.filename, body.mimeType, body.data, 'Butler Blog Images', 'w1200');
+      return jsonOut({ ok: false, error: 'Unknown blog action: ' + body.action });
     }
 
     // Coffee handlers (default)
@@ -347,12 +359,14 @@ function handleDelete(id) {
  * @param {string} mimeType
  * @param {string} base64data
  * @param {string} [folderName] — defaults to 'Butler Coffee Images'
+ * @param {string} [sz]         — thumbnail size, e.g. 'w800', 'w1200' (default 'w800')
  */
-function handleUploadImage(filename, mimeType, base64data, folderName) {
+function handleUploadImage(filename, mimeType, base64data, folderName, sz) {
   try {
     const bytes  = Utilities.base64Decode(base64data);
     const blob   = Utilities.newBlob(bytes, mimeType, filename || 'butler-image');
     const name   = folderName || 'Butler Coffee Images';
+    const size   = sz || 'w800';
 
     // Find or create the target folder
     const it     = DriveApp.getFoldersByName(name);
@@ -362,7 +376,7 @@ function handleUploadImage(filename, mimeType, base64data, folderName) {
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
     const fileId = file.getId();
-    const url    = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w400';
+    const url    = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=' + size;
     return jsonOut({ ok: true, data: { url: url, fileId: fileId } });
   } catch (err) {
     return jsonOut({ ok: false, error: 'Image upload failed: ' + err.message });
@@ -872,4 +886,264 @@ function handleImportMachines(machines) {
   }
 
   return jsonOut({ ok: true, data: machines });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ── BLOG ─────────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//
+// Sheet "Blog" — row 1 is the header row. Structure:
+//   A: id  |  B: title  |  C: slug  |  D: status  |  E: content  |  F: updatedAt
+//
+// status values: 'draft' | 'published'
+// content: HTML (from WYSIWYG editor)
+// Languages: English (primary), Spanish (translation)
+
+const BLOG_SHEET_NAME = 'Blog';
+
+// Column map — 17 columns total (A–Q)
+const BL = {
+  ID:         0,   // A  — internal ID
+  COPY_TITLE: 1,   // B  — mirrors title_en (sheet display / user-managed formula)
+  SLUG:       2,   // C  — URL slug
+  STATUS:     3,   // D  — 'draft' | 'published'
+  UPDATED_AT: 4,   // E  — ISO timestamp
+  CATEGORY:   5,   // F  — category string
+  TAGS:       6,   // G  — comma-separated tags
+  AUTHOR:     7,   // H  — author name
+  FEATURED:   8,   // I  — 'true' | 'false'
+  IMAGE_URL:    9,   // J  — hero image URL
+  IMAGE_ALT:    10,  // K  — image ALT text
+  IMAGE_CREDIT: 11,  // L  — image credit / attribution
+  TITLE_EN:     12,  // M  — English title (primary)
+  EXCERPT_EN:   13,  // N  — English excerpt (plain text)
+  CONTENT_EN:   14,  // O  — English HTML body
+  TITLE_ES:     15,  // P  — Spanish title
+  EXCERPT_ES:   16,  // Q  — Spanish excerpt (plain text)
+  CONTENT_ES:   17,  // R  — Spanish HTML body
+};
+const TOTAL_COLS_BLOG = 18;
+
+function getSheetBlog() {
+  var ss    = SpreadsheetApp.openById(SS_ID);
+  var sheet = ss.getSheetByName(BLOG_SHEET_NAME);
+  if (!sheet) throw new Error(
+    'Blog sheet not found — add a sheet named "Blog" with 17 header columns (A–Q): ' +
+    'ID | Copy of Title | Slug | Status | updatedAt | category | tags | author | featured | ImageURL | imageALT | title_en | excerpt_en | content_en | title_es | excerpt_es | content_es'
+  );
+  return sheet;
+}
+
+function rowToAppBlog(row) {
+  return {
+    id:         String(row[BL.ID]         || ''),
+    slug:       String(row[BL.SLUG]       || ''),
+    status:     String(row[BL.STATUS]     || 'draft'),
+    updatedAt:  String(row[BL.UPDATED_AT] || ''),
+    category:   String(row[BL.CATEGORY]   || ''),
+    tags:       String(row[BL.TAGS]       || ''),
+    author:     String(row[BL.AUTHOR]     || ''),
+    featured:   row[BL.FEATURED] === true || String(row[BL.FEATURED]) === 'true',
+    imageUrl:   String(row[BL.IMAGE_URL]  || ''),
+    imageAlt:   String(row[BL.IMAGE_ALT]  || ''),
+    title_en:   String(row[BL.TITLE_EN]   || ''),
+    excerpt_en: String(row[BL.EXCERPT_EN] || ''),
+    content_en: String(row[BL.CONTENT_EN] || ''),
+    title_es:     String(row[BL.TITLE_ES]     || ''),
+    excerpt_es:   String(row[BL.EXCERPT_ES]   || ''),
+    content_es:   String(row[BL.CONTENT_ES]   || ''),
+    imageCredit:  String(row[BL.IMAGE_CREDIT] || ''),
+  };
+}
+
+function applyToRowBlog(row, post) {
+  if (post.id         !== undefined) row[BL.ID]         = post.id;
+  if (post.title_en   !== undefined) row[BL.COPY_TITLE] = post.title_en; // mirror for sheet readability
+  if (post.slug       !== undefined) row[BL.SLUG]       = post.slug;
+  if (post.status     !== undefined) row[BL.STATUS]     = post.status;
+  if (post.updatedAt  !== undefined) row[BL.UPDATED_AT] = post.updatedAt;
+  if (post.category   !== undefined) row[BL.CATEGORY]   = post.category;
+  if (post.tags       !== undefined) row[BL.TAGS]       = post.tags;
+  if (post.author     !== undefined) row[BL.AUTHOR]     = post.author;
+  if (post.featured   !== undefined) row[BL.FEATURED]   = String(post.featured);
+  if (post.imageUrl   !== undefined) row[BL.IMAGE_URL]  = post.imageUrl;
+  if (post.imageAlt   !== undefined) row[BL.IMAGE_ALT]  = post.imageAlt;
+  if (post.title_en   !== undefined) row[BL.TITLE_EN]   = post.title_en;
+  if (post.excerpt_en !== undefined) row[BL.EXCERPT_EN] = post.excerpt_en;
+  if (post.content_en !== undefined) row[BL.CONTENT_EN] = post.content_en;
+  if (post.title_es     !== undefined) row[BL.TITLE_ES]     = post.title_es;
+  if (post.excerpt_es   !== undefined) row[BL.EXCERPT_ES]   = post.excerpt_es;
+  if (post.content_es   !== undefined) row[BL.CONTENT_ES]   = post.content_es;
+  if (post.imageCredit  !== undefined) row[BL.IMAGE_CREDIT] = post.imageCredit;
+  return row;
+}
+
+// ─── Blog Auto-translate (bidirectional via LanguageApp) ─────────────────────
+//
+// Pipeline:
+//  1. If HTML → htmlToMarkdown() converts headings, lists, blockquotes, hr to MD
+//  2. Split on \n\n → array of paragraphs (each may start with # / ## / - / > )
+//  3. translateParagraph() strips the MD prefix, calls LanguageApp, re-attaches
+//     the prefix. HR lines (---) are passed through untranslated.
+//
+// Individual per-paragraph calls are used instead of a batched separator because
+// Google Translate unpredictably modifies or drops separator strings.
+
+function isHtmlString(s) { return /^\s*<[a-zA-Z]/.test(s || ''); }
+
+/** Strip all HTML tags and decode common entities to plain text. */
+function stripInline(s) {
+  return (s || '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Convert HTML to clean Markdown.
+ * Block elements → Markdown equivalents; inline tags stripped; entities decoded.
+ */
+function htmlToMarkdown(html) {
+  return (html || '')
+    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, function(_, t) { return '\n\n# '    + stripInline(t) + '\n\n'; })
+    .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, function(_, t) { return '\n\n## '   + stripInline(t) + '\n\n'; })
+    .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, function(_, t) { return '\n\n### '  + stripInline(t) + '\n\n'; })
+    .replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, function(_, t) { return '\n\n#### ' + stripInline(t) + '\n\n'; })
+    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi,  function(_, t) { return '\n- ' + stripInline(t); })
+    .replace(/<\/?(?:ul|ol)[^>]*>/gi, '\n')
+    .replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, function(_, t) { return '\n\n> ' + stripInline(t) + '\n\n'; })
+    .replace(/<hr[^>]*\/?>/gi, '\n\n---\n\n')
+    .replace(/<\/(?:p|div)>/gi, '\n\n').replace(/<(?:p|div)[^>]*>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * Translate one Markdown paragraph.
+ * - Detects "# ", "## ", "- ", "> " prefixes → strips, translates text, re-attaches.
+ * - "---" dividers are passed through unchanged.
+ * - Multi-line list blocks (lines joined by \n) are translated line by line.
+ */
+function translateParagraph(para, from, to) {
+  var p = para.trim();
+  if (!p) return p;
+  if (/^-{3,}$/.test(p)) return p;                          // HR — pass through
+
+  // Single-line Markdown prefix (# heading or - list item or > blockquote)
+  var prefixMatch = p.match(/^(#{1,4} |- |> )/);
+  if (prefixMatch) {
+    var prefix = prefixMatch[1];
+    var text   = p.slice(prefix.length).trim();
+    return text ? prefix + LanguageApp.translate(text, from, to) : p;
+  }
+
+  // Multi-line block (e.g. consecutive list items joined by \n)
+  if (p.indexOf('\n') !== -1) {
+    return p.split('\n').map(function(line) {
+      var lm = line.match(/^(- |> )/);
+      if (lm) {
+        var lt = line.slice(lm[1].length).trim();
+        return lt ? lm[1] + LanguageApp.translate(lt, from, to) : line;
+      }
+      return line.trim() ? LanguageApp.translate(line.trim(), from, to) : line;
+    }).join('\n');
+  }
+
+  return LanguageApp.translate(p, from, to);
+}
+
+function doTranslateBlog(body) {
+  if (!body) return jsonOut({ ok: false, error: 'doTranslateBlog must be called via POST, not run directly.' });
+  var from    = String(body.from    || 'en');
+  var to      = String(body.to      || 'es');
+  var title   = String(body.title   || '');
+  var excerpt = String(body.excerpt || '');
+  var content = String(body.content || '');
+
+  try {
+    var translatedContent = '';
+    if (content) {
+      var md    = isHtmlString(content) ? htmlToMarkdown(content) : content;
+      var paras = md.split(/\n\n+/).filter(function(p) { return p.trim(); });
+      translatedContent = paras
+        .map(function(p) { return translateParagraph(p, from, to); })
+        .join('\n\n');
+    }
+
+    return jsonOut({
+      ok: true,
+      data: {
+        title:   title   ? LanguageApp.translate(title,   from, to) : '',
+        excerpt: excerpt ? LanguageApp.translate(excerpt, from, to) : '',
+        content: translatedContent,
+      }
+    });
+  } catch(e) {
+    return jsonOut({ ok: false, error: 'Translation failed: ' + e.message });
+  }
+}
+
+// ─── Blog doGet ───────────────────────────────────────────────────────────────
+
+function doGetBlog() {
+  const sheet = getSheetBlog();
+  const data  = sheet.getDataRange().getValues();
+  const posts = [];
+
+  // Row 0 = header row → start at row index 1
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (String(row[BL.ID]).trim() === '') continue; // skip empty rows
+    posts.push(rowToAppBlog(row));
+  }
+
+  // Return all posts (admin sees drafts too); sort newest-first
+  posts.sort(function(a, b) {
+    return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
+  });
+
+  return jsonOut({ ok: true, data: posts });
+}
+
+// ─── Blog Save (create or update) ─────────────────────────────────────────────
+
+function handleSaveBlogPost(post) {
+  const sheet = getSheetBlog();
+  const data  = sheet.getDataRange().getValues();
+
+  // Update existing post
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][BL.ID]) === String(post.id)) {
+      const row = ensureRowLength(copyRow(data[i]), TOTAL_COLS_BLOG);
+      applyToRowBlog(row, post);
+      sheet.getRange(i + 1, 1, 1, TOTAL_COLS_BLOG).setValues([row]);
+      return jsonOut({ ok: true, data: rowToAppBlog(row) });
+    }
+  }
+
+  // New post
+  const newRow = new Array(TOTAL_COLS_BLOG).fill('');
+  applyToRowBlog(newRow, post);
+  sheet.appendRow(newRow);
+  return jsonOut({ ok: true, data: rowToAppBlog(newRow) });
+}
+
+// ─── Blog Delete ──────────────────────────────────────────────────────────────
+
+function handleDeleteBlogPost(id) {
+  const sheet = getSheetBlog();
+  const data  = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][BL.ID]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return jsonOut({ ok: true, data: { deleted: id } });
+    }
+  }
+  return jsonOut({ ok: false, error: 'Post not found for id: ' + id });
 }

@@ -1,11 +1,19 @@
 /**
- * SubscriptionPanel — content-only component for Subscription Levels.
- * Rendered inside App.jsx's sidebar + main layout when panel === 'subs'.
+ * SubscriptionPanel — full CRUD for Subscription Levels.
+ * Mounted at route `butlercoffee/subscription/*` (wildcard keeps component
+ * alive across list / view / form navigation — no remount, no data refetch).
+ *
+ * URL scheme:
+ *   /butlercoffee/subscription            → list
+ *   /butlercoffee/subscription/new        → new-level form
+ *   /butlercoffee/subscription/:id        → view
+ *   /butlercoffee/subscription/:id/edit   → edit form
  *
  * Images: upload manually to the shared Drive folder, then paste the URL/ID here.
  * Drive folder: https://drive.google.com/drive/folders/1Ek32YHfrAmUryNTp4oz7Sz02tE4Jerz5
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { apiCall } from './lib/api.js';
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
@@ -97,17 +105,46 @@ function sizesFor(title) {
   return (title || '').toLowerCase().includes('summit') ? SUMMIT_SIZES : OTHER_SIZES;
 }
 
-// ── Main component (content only) ─────────────────────────────────────────────
+// ── Main component ────────────────────────────────────────────────────────────
 export default function SubscriptionPanel() {
+  // ── URL routing ────────────────────────────────────────────────────────────
+  const { '*': splat = '' } = useParams();
+  const navigate = useNavigate();
+
+  const splatParts = splat.split('/').filter(Boolean);
+  const isNew      = splatParts[0] === 'new';
+  const isEdit     = splatParts[1] === 'edit';
+  const urlId      = (!isNew && splatParts[0]) ? splatParts[0] : null;
+  const mode       = !splatParts[0] ? 'list' : isNew ? 'form' : isEdit ? 'form' : 'view';
+  const currentId  = urlId;
+
+  function openView(id)        { navigate(`/butlercoffee/subscription/${id}`); }
+  function openForm(id = null) { navigate(id ? `/butlercoffee/subscription/${id}/edit` : '/butlercoffee/subscription/new'); }
+  function backToList()        { navigate('/butlercoffee/subscription'); }
+
+  // ── Data state ─────────────────────────────────────────────────────────────
   const [subs,    setSubs]    = useState([]);
   const [loading, setLoading] = useState(false);
   const [toasts,  setToasts]  = useState([]);
-  const [subPanel, setSubPanel] = useState('list');   // 'list' | 'view' | 'form'
-  const [currentId, setCurrentId] = useState(null);
   const [form, setForm] = useState(emptySub);
   const [search, setSearch] = useState('');
   const [pendingDeleteId,   setPendingDeleteId]   = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
+  // ── Form initialization ────────────────────────────────────────────────────
+  const formKeyRef = useRef('');
+
+  useEffect(() => {
+    if (mode !== 'form') { formKeyRef.current = ''; return; }
+    const key = currentId || 'new';
+    if (formKeyRef.current === key) return;
+    if (currentId && subs.length === 0) return; // wait for data
+    const sub = currentId ? subs.find(s => s.id === currentId) : null;
+    if (currentId && !sub) return; // ID not found yet
+    setForm(sub ? { ...emptySub, ...sub } : { ...emptySub });
+    formKeyRef.current = key;
+    window.scrollTo(0, 0);
+  }, [mode, currentId, subs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toast(msg, type = 'success') {
     const id = Date.now() + Math.random();
@@ -126,7 +163,7 @@ export default function SubscriptionPanel() {
       toast('Could not connect to Sheet — check API URL.', 'error');
     } finally { setLoading(false); }
   }
-  useEffect(() => { pullFromSheet(); }, []);
+  useEffect(() => { pullFromSheet(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Push all to sheet ────────────────────────────────────────────────────────
   async function pushToSheet() {
@@ -150,16 +187,6 @@ export default function SubscriptionPanel() {
 
   function updateField(key, value) { setForm(f => ({ ...f, [key]: value })); }
 
-  function openView(id) { setCurrentId(id); setSubPanel('view'); window.scrollTo(0, 0); }
-  function openForm(id = null) {
-    const sub = id ? subs.find(s => s.id === id) : null;
-    setCurrentId(id);
-    setForm(sub ? { ...emptySub, ...sub } : emptySub);
-    setSubPanel('form');
-    window.scrollTo(0, 0);
-  }
-  function closeForm() { setSubPanel('list'); setCurrentId(null); setForm(emptySub); }
-
   // ── Save individual tier ─────────────────────────────────────────────────────
   async function saveSub(e) {
     e.preventDefault();
@@ -172,7 +199,7 @@ export default function SubscriptionPanel() {
         ? prev.map(s => s.id === saved.id ? saved : s)
         : [saved, ...prev]);
       toast('Subscription level saved!');
-      closeForm();
+      navigate(`/butlercoffee/subscription/${saved.id}`); // go to view after save
     } catch (err) { toast(`Save failed — ${err.message}`, 'error'); }
     finally { setLoading(false); }
   }
@@ -185,15 +212,14 @@ export default function SubscriptionPanel() {
     try {
       await apiCall('POST', { action: 'delete', id }, 'subs');
       setSubs(prev => prev.filter(s => s.id !== id));
-      if (currentId) closeForm();
+      navigate('/butlercoffee/subscription'); // go to list after delete
       toast('Tier deleted.', 'error');
     } catch (err) { toast(`Delete failed — ${err.message}`, 'error'); }
     finally { setLoading(false); }
   }
 
-
   return <>
-    {subPanel === 'list' && (
+    {mode === 'list' && (
       <SubsListPanel
         search={search} setSearch={setSearch}
         filtered={filtered} total={subs.length}
@@ -203,16 +229,16 @@ export default function SubscriptionPanel() {
         onPush={pushToSheet}
       />
     )}
-    {subPanel === 'view' && (
+    {mode === 'view' && (
       <SubsViewPanel
         sub={subs.find(s => s.id === currentId)}
-        onBack={closeForm} onEdit={openForm}
+        onBack={backToList} onEdit={openForm}
       />
     )}
-    {subPanel === 'form' && (
+    {mode === 'form' && (
       <SubsFormPanel
         form={form} updateField={updateField}
-        saveSub={saveSub} closeForm={closeForm}
+        saveSub={saveSub} closeForm={backToList}
         currentId={currentId}
         setPendingDeleteId={setPendingDeleteId}
       />

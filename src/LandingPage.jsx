@@ -1,9 +1,11 @@
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
 // App definitions — add new ones here when you create them
 const APPS = [
   {
     id:       'coffee',
+    path:     '/butlercoffee',
     icon:     'fa-mug-hot',
     name:     'Butler Coffee',
     desc:     'Coffee catalog, label generator, subscription management',
@@ -11,6 +13,7 @@ const APPS = [
   },
   {
     id:       'appdev',
+    path:     null,
     icon:     'fa-code',
     name:     'App Development',
     desc:     'Internal tools and custom app projects',
@@ -18,8 +21,9 @@ const APPS = [
   },
 ];
 
-export default function LandingPage({ onEnterApp }) {
+export default function LandingPage() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <div className="landing-page">
@@ -52,7 +56,7 @@ export default function LandingPage({ onEnterApp }) {
             <div
               key={app.id}
               className={`app-card${app.status === 'soon' ? ' app-card--soon' : ''}`}
-              onClick={() => app.status === 'active' && onEnterApp(app.id)}
+              onClick={() => app.status === 'active' && app.path && navigate(app.path)}
               title={app.status === 'soon' ? 'Coming soon' : undefined}
             >
               <div className="app-card__icon"><i className={`fa-solid ${app.icon}`} /></div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useCoffee } from './CoffeeContext.jsx';
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function todayISO() { return new Date().toISOString().slice(0, 10); }
@@ -274,7 +275,8 @@ function LabelPreview({ item }) {
 }
 
 // ── Main panel ────────────────────────────────────────────────────────────────
-export default function LabelsPanel({ coffees }) {
+export default function LabelsPanel() {
+  const { coffees } = useCoffee();
   // Form state
   const [selectedId, setSelectedId] = useState('');
   const [bagSize,    setBagSize]    = useState('');
