@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiCall } from './lib/api.js';
+import { getCached, setCached, clearCached } from './lib/cache.js';
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
 const DRIVE_IMG_FALLBACK = '1LYVoFp3Y1jv2i1ow7G7nPxCCQQzLSVZp';
@@ -153,17 +154,26 @@ export default function SubscriptionPanel() {
   }
 
   // ── Pull from sheet ──────────────────────────────────────────────────────────
-  async function pullFromSheet(showToast = false) {
+  async function pullFromSheet(force = false) {
+    if (!force) {
+      const cached = getCached('subs');
+      if (cached) { setSubs(cached); return; }
+    }
     setLoading(true);
     try {
       const data = await apiCall('GET', undefined, 'subs');
-      setSubs(Array.isArray(data) ? data : []);
-      if (showToast) toast('Pulled latest from Google Sheet!');
+      const list = Array.isArray(data) ? data : [];
+      setSubs(list);
+      setCached('subs', list);
+      if (force) toast('Pulled latest from Google Sheet!');
     } catch (err) {
       toast('Could not connect to Sheet — check API URL.', 'error');
     } finally { setLoading(false); }
   }
-  useEffect(() => { pullFromSheet(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleSubsPull() { clearCached('subs'); pullFromSheet(true); }
+
+  useEffect(() => { pullFromSheet(false); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Push all to sheet ────────────────────────────────────────────────────────
   async function pushToSheet() {
@@ -225,7 +235,7 @@ export default function SubscriptionPanel() {
         filtered={filtered} total={subs.length}
         openForm={openForm} openView={openView}
         setPendingDeleteId={setPendingDeleteId}
-        onPull={() => pullFromSheet(true)}
+        onPull={handleSubsPull}
         onPush={pushToSheet}
       />
     )}
@@ -291,7 +301,6 @@ function SubsListPanel({ search, setSearch, filtered, total, openForm, openView,
           <input className="search-input" type="search" placeholder="Search levels…"
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <button className="btn btn--primary" onClick={() => openForm(null)}>+ Add Level</button>
         <button className="btn btn--ghost btn--sm" onClick={onPull} title="Pull latest from Google Sheet">
           <i className="fa-solid fa-cloud-arrow-down" style={{marginRight:5}} />Pull
         </button>

@@ -6,6 +6,7 @@
  */
 import { createContext, useContext, useEffect, useState } from 'react';
 import { apiCall } from './lib/api.js';
+import { getCached, setCached, clearCached } from './lib/cache.js';
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 export function newId() {
@@ -31,17 +32,25 @@ export function CoffeeProvider({ children }) {
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000);
   }
 
-  async function loadFromSheet(showToast = false) {
+  async function loadFromSheet(force = false) {
+    if (!force) {
+      const cached = getCached('coffee');
+      if (cached) { setCoffees(cached); return; }
+    }
     setLoading(true);
     try {
       const data = await apiCall('GET');
-      setCoffees(Array.isArray(data) ? data : []);
-      if (showToast) toast('Synced from Google Sheet!', 'success');
+      const list = Array.isArray(data) ? data : [];
+      setCoffees(list);
+      setCached('coffee', list);
+      if (force) toast('Synced from Google Sheet!', 'success');
     } catch (err) {
       toast('Could not connect to Sheet — check API URL.', 'error');
       console.error(err);
     } finally { setLoading(false); }
   }
+
+  function pullCoffee() { clearCached('coffee'); loadFromSheet(true); }
 
   async function saveCoffee(coffee) {
     const payload = {
@@ -112,12 +121,12 @@ export function CoffeeProvider({ children }) {
     });
   }
 
-  useEffect(() => { loadFromSheet(); }, []);
+  useEffect(() => { loadFromSheet(false); }, []);
 
   return (
     <CoffeeContext.Provider value={{
       coffees, loading, toasts,
-      loadFromSheet, saveCoffee, deleteCoffee, importCoffees, uploadImage,
+      loadFromSheet, pullCoffee, saveCoffee, deleteCoffee, importCoffees, uploadImage,
       setCoffees,
     }}>
       {children}

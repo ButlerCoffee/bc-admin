@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiCall } from './lib/api.js';
 import { toSlug } from './CoffeeContext.jsx';
+import { getCached, setCached, clearCached } from './lib/cache.js';
 
 // ── Detect content format ─────────────────────────────────────────────────────
 function isHtml(s) { return /^\s*<[a-zA-Z]/.test(s || ''); }
@@ -494,17 +495,25 @@ export default function BlogPanel() {
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3200);
   }
 
-  async function pullFromSheet(showToast = false) {
+  async function pullFromSheet(force = false) {
+    if (!force) {
+      const cached = getCached('blog');
+      if (cached) { setPosts(cached); return; }
+    }
     setLoading(true);
     try {
       const data = await apiCall('GET', undefined, 'blog');
-      setPosts(Array.isArray(data) ? data : []);
-      if (showToast) toast('Synced from Google Sheet!');
+      const list = Array.isArray(data) ? data : [];
+      setPosts(list);
+      setCached('blog', list);
+      if (force) toast('Synced from Google Sheet!');
     } catch (err) { toast(`Could not load posts — ${err.message}`, 'error'); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { pullFromSheet(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  function handleBlogPull() { clearCached('blog'); pullFromSheet(true); }
+
+  useEffect(() => { pullFromSheet(false); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateField(key, value) {
     setForm(f => {
@@ -665,11 +674,8 @@ export default function BlogPanel() {
               ))}
             </div>
             <div style={{ flex:1 }} />
-            <button className="btn btn--ghost btn--sm" onClick={() => pullFromSheet(true)}>
-              <i className="fa-solid fa-cloud-arrow-down" style={{ marginRight:5 }} />Sync
-            </button>
-            <button className="btn btn--primary btn--sm" onClick={() => openForm(null)}>
-              <i className="fa-solid fa-plus" style={{ marginRight:5 }} />New Post
+            <button className="btn btn--ghost btn--sm" onClick={handleBlogPull}>
+              <i className="fa-solid fa-cloud-arrow-down" style={{ marginRight:5 }} />Pull
             </button>
           </div>
 
@@ -702,10 +708,10 @@ export default function BlogPanel() {
                       }
                     </td>
                     <td>
-                      <div style={{ fontWeight:600, fontSize:'0.9rem' }}>
-                        {p.title_en || '(Untitled)'}
-                        {p.title_en && <span style={{ marginLeft:6, fontSize:'0.68rem', color:'var(--muted)', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:3, padding:'1px 5px' }}>🇨🇦 EN</span>}
-                        {p.title_es && <span style={{ marginLeft:4, fontSize:'0.68rem', color:'var(--muted)', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:3, padding:'1px 5px' }}>🇪🇸 ES</span>}
+                      <div style={{ fontWeight:600, fontSize:'0.9rem' }}>{p.title_en || '(Untitled)'}</div>
+                      <div style={{ marginTop:3, display:'flex', gap:4 }}>
+                        {p.title_en && <span style={{ fontSize:'0.68rem', color:'var(--muted)', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:3, padding:'1px 5px' }}>🇨🇦 EN</span>}
+                        {p.title_es && <span style={{ fontSize:'0.68rem', color:'var(--muted)', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:3, padding:'1px 5px' }}>🇪🇸 ES</span>}
                       </div>
                       {p.excerpt_en && <div className="td-sub" style={{ color:'var(--muted)', fontSize:'0.78rem', maxWidth:440, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.excerpt_en}</div>}
                       <div className="td-sub" style={{ fontFamily:'monospace', fontSize:'0.72rem' }}>/blog/{p.slug}</div>

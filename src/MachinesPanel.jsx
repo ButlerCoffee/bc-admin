@@ -19,6 +19,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiCall } from './lib/api.js';
+import { getCached, setCached, clearCached } from './lib/cache.js';
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
 const DRIVE_IMG_FALLBACK = '1LYVoFp3Y1jv2i1ow7G7nPxCCQQzLSVZp';
@@ -296,17 +297,25 @@ export default function MachinesPanel() {
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000);
   }
 
-  async function pullFromSheet(showToast = false) {
+  async function pullFromSheet(force = false) {
+    if (!force) {
+      const cached = getCached('machines');
+      if (cached) { setMachines(cached); return; }
+    }
     setLoading(true);
     try {
       const data = await apiCall('GET', undefined, 'machines');
-      setMachines(Array.isArray(data) ? data : []);
-      if (showToast) toast('Synced from Google Sheet!', 'success');
+      const list = Array.isArray(data) ? data : [];
+      setMachines(list);
+      setCached('machines', list);
+      if (force) toast('Synced from Google Sheet!', 'success');
     } catch (err) {
       toast('Could not sync — check API URL.', 'error');
       console.error(err);
     } finally { setLoading(false); }
   }
+
+  function handleMachinesPull() { clearCached('machines'); pullFromSheet(true); }
 
   async function pushToSheet() {
     if (!window.confirm(`Push all ${machines.length} machine(s) to Google Sheet? This will overwrite all data rows.`)) return;
@@ -396,7 +405,7 @@ export default function MachinesPanel() {
               <option value="">All areas</option>
               {allAreas.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
-            <button className="btn btn--ghost btn--sm" onClick={() => pullFromSheet(true)} title="Pull from Sheet">
+            <button className="btn btn--ghost btn--sm" onClick={handleMachinesPull} title="Pull from Sheet">
               <i className="fa-solid fa-cloud-arrow-down" style={{ marginRight:5 }} />Pull
             </button>
             <button className="btn btn--ghost btn--sm" onClick={pushToSheet} title="Push to Sheet">
@@ -408,7 +417,6 @@ export default function MachinesPanel() {
               className="btn btn--ghost btn--sm"
               title="Open image folder in Drive"
             >📂 Images</a>
-            <button className="btn btn--primary btn--sm" onClick={() => openForm(null)}>+ Add Machine</button>
           </div>
 
           {/* Table */}

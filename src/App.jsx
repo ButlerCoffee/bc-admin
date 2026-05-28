@@ -97,7 +97,7 @@ function renderMarkdown(md) {
 
 // ── App layout (sidebar + content) ───────────────────────────────────────────
 export default function App() {
-  const { coffees, loadFromSheet, importCoffees } = useCoffee();
+  const { coffees, loadFromSheet, pullCoffee, importCoffees } = useCoffee();
   const { logout } = useAuth();
   const navigate   = useNavigate();
   const location   = useLocation();
@@ -189,7 +189,7 @@ export default function App() {
               <span className="nav-link__icon"><i className="fa-solid fa-tag" /></span>
               {!sc && <span>Label Generator</span>}
             </NavLink>
-            <button className="nav-link" onClick={() => loadFromSheet(true)} title="Sync">
+            <button className="nav-link" onClick={pullCoffee} title="Sync">
               <span className="nav-link__icon"><i className="fa-solid fa-rotate" /></span>
               {!sc && <span>Sync</span>}
             </button>

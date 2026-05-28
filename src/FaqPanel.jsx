@@ -21,6 +21,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiCall } from './lib/api.js';
 import { newId } from './CoffeeContext.jsx';
+import { getCached, setCached, clearCached } from './lib/cache.js';
 
 // ── Markdown renderer (links supported) ───────────────────────────────────────
 function renderMarkdown(md) {
@@ -129,17 +130,23 @@ export default function FaqPanel() {
   const [loading, setLoading] = useState(false);
   const { toast, ToastUI }    = useToasts();
 
-  // Load on mount
+  // Load on mount — use cache if fresh (today), otherwise fetch from sheet
   useEffect(() => {
-    load();
+    load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function load() {
+  async function load(force = false) {
+    if (!force) {
+      const cached = getCached('faq');
+      if (cached) { setFaqs(cached); return; }
+    }
     setLoading(true);
     try {
       const data = await apiCall('GET', undefined, 'faq');
-      setFaqs(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setFaqs(list);
+      setCached('faq', list);
     } catch (err) {
       // Silently handle — backend sheet may not exist yet
       console.warn('FAQ sheet not yet available:', err.message);
@@ -147,6 +154,11 @@ export default function FaqPanel() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handlePull() {
+    clearCached('faq');
+    load(true);
   }
 
   async function saveFaq(faq) {
@@ -207,13 +219,59 @@ export default function FaqPanel() {
   if (isNew)       return <FaqForm key="new"       faqs={faqs} onSave={saveFaq} onDelete={deleteFaq} toast={toast} ToastUI={ToastUI} loading={loading} />;
   if (isEdit)      return <FaqForm key={editId}    faqs={faqs} editId={editId}  onSave={saveFaq} onDelete={deleteFaq} toast={toast} ToastUI={ToastUI} loading={loading} />;
   if (isView)      return <FaqView key={viewId}    faqs={faqs} viewId={viewId}  onDelete={deleteFaq} toast={toast} ToastUI={ToastUI} loading={loading} />;
-  return                  <FaqList                 faqs={faqs} onRefresh={load} onPush={pushToSheet} toast={toast} ToastUI={ToastUI} loading={loading} />;
+  return                  <FaqList                 faqs={faqs} setFaqs={setFaqs} onRefresh={handlePull} onPush={pushToSheet} toast={toast} ToastUI={ToastUI} loading={loading} />;
 }
 
 // ── FAQ List ──────────────────────────────────────────────────────────────────
-function FaqList({ faqs, onRefresh, onPush, toast, ToastUI, loading }) {
-  const navigate = useNavigate();
-  const sorted   = [...faqs].sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
+const BADGE = {
+  base: { fontSize:'0.68rem', color:'var(--muted)', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:3, padding:'1px 5px', display:'inline-block' },
+};
+
+function FaqList({ faqs, setFaqs, onRefresh, onPush, toast, ToastUI, loading }) {
+  const navigate   = useNavigate();
+  const [sorted, setSorted] = useState(() => [...faqs].sort((a, b) => Number(a.sort_order) - Number(b.sort_order)));
+  const dragIdx    = useRef(null);
+
+  // Keep sorted in sync when faqs prop changes (e.g. after pull)
+  useEffect(() => {
+    setSorted([...faqs].sort((a, b) => Number(a.sort_order) - Number(b.sort_order)));
+  }, [faqs]);
+
+  // ── Drag handlers ────────────────────────────────────────────────────────────
+  function handleDragStart(e, idx) {
+    dragIdx.current = idx;
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e, idx) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragIdx.current === null || dragIdx.current === idx) return;
+
+    setSorted(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(dragIdx.current, 1);
+      next.splice(idx, 0, moved);
+      dragIdx.current = idx;
+      return next;
+    });
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    // Commit new sort_order values (1-based) back to parent state + cache
+    setSorted(prev => {
+      const reordered = prev.map((f, i) => ({ ...f, sort_order: i + 1 }));
+      setFaqs(reordered);
+      return reordered;
+    });
+    dragIdx.current = null;
+    toast('Order updated — hit Push to save to sheet.', 'success');
+  }
+
+  function handleDragEnd() {
+    dragIdx.current = null;
+  }
 
   return (
     <div id="list-panel">
@@ -227,9 +285,6 @@ function FaqList({ faqs, onRefresh, onPush, toast, ToastUI, loading }) {
         </button>
         <button className="btn btn--ghost btn--sm" onClick={onPush} title="Push to sheet" disabled={loading}>
           <i className="fa-solid fa-cloud-arrow-up" style={{ marginRight: 6 }} />Push
-        </button>
-        <button className="btn btn--primary" onClick={() => navigate('/butlercoffee/faq/new')}>
-          + Add Question
         </button>
       </div>
 
@@ -246,28 +301,45 @@ function FaqList({ faqs, onRefresh, onPush, toast, ToastUI, loading }) {
           <table>
             <thead>
               <tr>
-                <th style={{ width: 50 }}>#</th>
-                <th>Question (EN)</th>
-                <th>Question (ES)</th>
+                <th style={{ width: 28 }} />
+                <th>Question</th>
                 <th style={{ width: 90 }}>Visible</th>
                 <th style={{ width: 100 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {sorted.map(f => (
-                <tr key={f.id} className="tr--clickable" onClick={() => navigate(`/butlercoffee/faq/${f.id}`)}>
-                  <td style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{f.sort_order || '—'}</td>
+              {sorted.map((f, idx) => (
+                <tr
+                  key={f.id}
+                  className="tr--clickable"
+                  draggable
+                  onDragStart={e => handleDragStart(e, idx)}
+                  onDragOver={e => handleDragOver(e, idx)}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  onClick={() => navigate(`/butlercoffee/faq/${f.id}`)}
+                  style={{ cursor: 'grab' }}
+                >
+                  {/* Drag handle */}
+                  <td style={{ color:'var(--border)', fontSize:'1rem', textAlign:'center', paddingRight:0, cursor:'grab' }}
+                    onClick={e => e.stopPropagation()}>
+                    <i className="fa-solid fa-grip-vertical" />
+                  </td>
+
+                  {/* Question column */}
                   <td>
                     <div className="td-name">{f.question_en || '—'}</div>
                     {f.answer_en && (
-                      <div className="td-sub" style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {f.answer_en.replace(/[*_#\[\]()]/g, '').slice(0, 80)}{f.answer_en.length > 80 ? '…' : ''}
+                      <div className="td-sub" style={{ maxWidth: 480, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {f.answer_en.replace(/[*_#\[\]()]/g, '').slice(0, 90)}{f.answer_en.length > 90 ? '…' : ''}
                       </div>
                     )}
+                    <div style={{ marginTop: 4, display:'flex', gap:4 }}>
+                      {f.question_en && <span style={BADGE.base}>🇨🇦 EN</span>}
+                      {f.question_es && <span style={BADGE.base}>🇪🇸 ES</span>}
+                    </div>
                   </td>
-                  <td style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>
-                    {f.question_es || <span style={{ opacity: 0.4 }}>—</span>}
-                  </td>
+
                   <td>
                     {f.visible
                       ? <span className="level-badge level--explorer">Visible</span>
@@ -283,6 +355,11 @@ function FaqList({ faqs, onRefresh, onPush, toast, ToastUI, loading }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {sorted.length > 0 && (
+        <div style={{ marginTop: 8, fontSize:'0.75rem', color:'var(--muted)' }}>
+          Drag rows to reorder · {sorted.length} question{sorted.length === 1 ? '' : 's'}
         </div>
       )}
     </div>
