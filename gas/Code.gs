@@ -239,6 +239,7 @@ function doGet(e) {
     if (e && e.parameter && e.parameter.sheet === 'subs')     return doGetSubs();
     if (e && e.parameter && e.parameter.sheet === 'machines') return doGetMachines();
     if (e && e.parameter && e.parameter.sheet === 'blog')     return doGetBlog();
+    if (e && e.parameter && e.parameter.sheet === 'faq')      return doGetFaq();
     const sheet = getSheet();
     const data  = sheet.getDataRange().getValues();
     const coffees = [];
@@ -264,6 +265,13 @@ function doGet(e) {
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
+
+    // Route to FAQ handlers
+    if (body.sheet === 'faq') {
+      if (body.action === 'save')   return handleSaveFaq(body.faq);
+      if (body.action === 'delete') return handleDeleteFaq(body.id);
+      return jsonOut({ ok: false, error: 'Unknown faq action: ' + body.action });
+    }
 
     // Route to Subscription handlers
     if (body.sheet === 'subs') {
@@ -1146,4 +1154,126 @@ function handleDeleteBlogPost(id) {
     }
   }
   return jsonOut({ ok: false, error: 'Post not found for id: ' + id });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── FAQ SHEET ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Sheet "FAQ" — row 1 is the header row. Data starts at row 2.
+// Columns (A–H):
+//   id | question_en | answer_en | question_es | answer_es | sort_order | visible | updatedAt
+//
+// visible: checkbox (TRUE/FALSE) or text "true"/"false"
+// answer fields: Markdown text (rendered on the website)
+
+const FAQ_SHEET_NAME = 'FAQ';
+
+const FK = {
+  ID:          0,  // A
+  QUESTION_EN: 1,  // B
+  ANSWER_EN:   2,  // C
+  QUESTION_ES: 3,  // D
+  ANSWER_ES:   4,  // E
+  SORT_ORDER:  5,  // F
+  VISIBLE:     6,  // G
+  UPDATED_AT:  7,  // H
+};
+
+const TOTAL_COLS_FAQ = 8;
+
+function getSheetFaq() {
+  var ss    = SpreadsheetApp.openById(SS_ID);
+  var sheet = ss.getSheetByName(FAQ_SHEET_NAME);
+  if (!sheet) throw new Error(
+    'FAQ sheet not found — add a sheet tab named "FAQ" with headers: ' +
+    'id | question_en | answer_en | question_es | answer_es | sort_order | visible | updatedAt'
+  );
+  return sheet;
+}
+
+function rowToAppFaq(row) {
+  return {
+    id:          String(row[FK.ID]          || ''),
+    question_en: String(row[FK.QUESTION_EN] || ''),
+    answer_en:   String(row[FK.ANSWER_EN]   || ''),
+    question_es: String(row[FK.QUESTION_ES] || ''),
+    answer_es:   String(row[FK.ANSWER_ES]   || ''),
+    sort_order:  String(row[FK.SORT_ORDER]  || ''),
+    visible:     (row[FK.VISIBLE] === true
+               || String(row[FK.VISIBLE]).toUpperCase() === 'TRUE'
+               || String(row[FK.VISIBLE]).toUpperCase() === 'YES'),
+    updatedAt:   String(row[FK.UPDATED_AT]  || ''),
+  };
+}
+
+function applyToRowFaq(row, faq) {
+  row[FK.QUESTION_EN] = faq.question_en || '';
+  row[FK.ANSWER_EN]   = faq.answer_en   || '';
+  row[FK.QUESTION_ES] = faq.question_es || '';
+  row[FK.ANSWER_ES]   = faq.answer_es   || '';
+  row[FK.SORT_ORDER]  = faq.sort_order  || '';
+  row[FK.VISIBLE]     = faq.visible === true || faq.visible === 'true';
+  row[FK.UPDATED_AT]  = faq.updatedAt   || new Date().toISOString();
+  return row;
+}
+
+// ─── FAQ doGet ────────────────────────────────────────────────────────────────
+
+function doGetFaq() {
+  var sheet = getSheetFaq();
+  var data  = sheet.getDataRange().getValues();
+  var faqs  = [];
+
+  // Row 0 = header row → data starts at row index 1
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (String(row[FK.ID]).trim() === '') continue; // skip empty rows
+    faqs.push(rowToAppFaq(row));
+  }
+
+  faqs.sort(function(a, b) {
+    return Number(a.sort_order || 999) - Number(b.sort_order || 999);
+  });
+
+  return jsonOut({ ok: true, data: faqs });
+}
+
+// ─── FAQ Save (create or update) ──────────────────────────────────────────────
+
+function handleSaveFaq(faq) {
+  var sheet = getSheetFaq();
+  var data  = sheet.getDataRange().getValues();
+
+  // Update existing row
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][FK.ID]) === String(faq.id)) {
+      var row = ensureRowLength(copyRow(data[i]), TOTAL_COLS_FAQ);
+      applyToRowFaq(row, faq);
+      sheet.getRange(i + 1, 1, 1, TOTAL_COLS_FAQ).setValues([row]);
+      return jsonOut({ ok: true, data: rowToAppFaq(row) });
+    }
+  }
+
+  // New row — append
+  var newRow = new Array(TOTAL_COLS_FAQ).fill('');
+  newRow[FK.ID] = faq.id || String(Date.now());
+  applyToRowFaq(newRow, faq);
+  sheet.appendRow(newRow);
+  return jsonOut({ ok: true, data: rowToAppFaq(newRow) });
+}
+
+// ─── FAQ Delete ───────────────────────────────────────────────────────────────
+
+function handleDeleteFaq(id) {
+  var sheet = getSheetFaq();
+  var data  = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][FK.ID]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return jsonOut({ ok: true, data: { deleted: id } });
+    }
+  }
+  return jsonOut({ ok: false, error: 'FAQ not found for id: ' + id });
 }
