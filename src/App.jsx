@@ -177,6 +177,10 @@ export default function App() {
               <span className="nav-link__icon"><i className="fa-solid fa-pen-nib" /></span>
               {!sc && <span>Blog</span>}
             </NavLink>
+            <NavLink to="/butlercoffee/faq" className={navClass} title="FAQ">
+              <span className="nav-link__icon"><i className="fa-solid fa-circle-question" /></span>
+              {!sc && <span>FAQ</span>}
+            </NavLink>
           </div>
 
           <div className="nav-section">
@@ -259,6 +263,8 @@ function TopbarTitle() {
     return <span className="topbar__title">Label Generator</span>;
   if (p.startsWith('/butlercoffee/blog'))
     return <span className="topbar__title">Blog</span>;
+  if (p.startsWith('/butlercoffee/faq'))
+    return <span className="topbar__title">FAQ</span>;
   return <span className="topbar__title">Butler Coffee</span>;
 }
 
@@ -270,6 +276,8 @@ function TopbarActions() {
     return <button className="btn btn--primary" onClick={() => navigate('/butlercoffee/coffee/new')}>+ Add Coffee</button>;
   if (p === '/butlercoffee/machines')
     return <button className="btn btn--primary" onClick={() => navigate('/butlercoffee/machines/new')}>+ Add Machine</button>;
+  if (p === '/butlercoffee/faq')
+    return <button className="btn btn--primary" onClick={() => navigate('/butlercoffee/faq/new')}>+ Add Question</button>;
   return null;
 }
 
@@ -282,6 +290,7 @@ export function HomePanel() {
     { id: 'subscription', icon: 'fa-layer-group',  title: 'Subscription Levels',description: 'Tier content, pricing & buy links',           soon: false },
     { id: 'machines',     icon: 'fa-gears',        title: 'Machines',           description: 'Equipment catalogue & pricing',               soon: false },
     { id: 'blog',         icon: 'fa-pen-nib',      title: 'Blog',               description: 'Articles and guides from the team',           soon: false },
+    { id: 'faq',          icon: 'fa-circle-question', title: 'FAQ',             description: 'Manage website FAQ in EN & ES',               soon: false },
   ];
   return (
     <div className="home-panel">
