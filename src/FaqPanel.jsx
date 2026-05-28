@@ -174,6 +174,21 @@ export default function FaqPanel() {
     }
   }
 
+  async function pushToSheet() {
+    if (!faqs.length) { toast('Nothing to push.', 'error'); return; }
+    setLoading(true);
+    try {
+      for (const faq of faqs) {
+        await apiCall('POST', { action: 'save', faq }, 'faq');
+      }
+      toast(`Pushed ${faqs.length} FAQ${faqs.length === 1 ? '' : 's'} to sheet.`, 'success');
+    } catch (err) {
+      toast(`Push failed — ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function deleteFaq(id) {
     setLoading(true);
     try {
@@ -192,11 +207,11 @@ export default function FaqPanel() {
   if (isNew)       return <FaqForm key="new"       faqs={faqs} onSave={saveFaq} onDelete={deleteFaq} toast={toast} ToastUI={ToastUI} loading={loading} />;
   if (isEdit)      return <FaqForm key={editId}    faqs={faqs} editId={editId}  onSave={saveFaq} onDelete={deleteFaq} toast={toast} ToastUI={ToastUI} loading={loading} />;
   if (isView)      return <FaqView key={viewId}    faqs={faqs} viewId={viewId}  onDelete={deleteFaq} toast={toast} ToastUI={ToastUI} loading={loading} />;
-  return                  <FaqList                 faqs={faqs} onRefresh={load} toast={toast} ToastUI={ToastUI} loading={loading} />;
+  return                  <FaqList                 faqs={faqs} onRefresh={load} onPush={pushToSheet} toast={toast} ToastUI={ToastUI} loading={loading} />;
 }
 
 // ── FAQ List ──────────────────────────────────────────────────────────────────
-function FaqList({ faqs, onRefresh, toast, ToastUI, loading }) {
+function FaqList({ faqs, onRefresh, onPush, toast, ToastUI, loading }) {
   const navigate = useNavigate();
   const sorted   = [...faqs].sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
 
@@ -207,8 +222,11 @@ function FaqList({ faqs, onRefresh, toast, ToastUI, loading }) {
 
       <div className="toolbar" style={{ marginBottom: 16 }}>
         <div style={{ flex: 1 }} />
-        <button className="btn btn--ghost btn--sm" onClick={onRefresh} title="Refresh">
-          <i className="fa-solid fa-rotate" style={{ marginRight: 6 }} />Refresh
+        <button className="btn btn--ghost btn--sm" onClick={onRefresh} title="Pull from sheet">
+          <i className="fa-solid fa-cloud-arrow-down" style={{ marginRight: 6 }} />Pull
+        </button>
+        <button className="btn btn--ghost btn--sm" onClick={onPush} title="Push to sheet" disabled={loading}>
+          <i className="fa-solid fa-cloud-arrow-up" style={{ marginRight: 6 }} />Push
         </button>
         <button className="btn btn--primary" onClick={() => navigate('/butlercoffee/faq/new')}>
           + Add Question
@@ -313,7 +331,7 @@ function FaqView({ faqs, viewId, onDelete, toast, ToastUI, loading }) {
 
       <div className="form-grid">
         <div>
-          <Card icon="🇬🇧" title="English">
+          <Card icon="🇨🇦" title="English">
             <div className="view-field" style={{ marginBottom: 12 }}>
               <span className="view-field-label">Question</span>
               <span className="view-field-value" style={{ fontWeight: 600 }}>{faq.question_en || '—'}</span>
@@ -434,69 +452,70 @@ function FaqForm({ faqs, editId, onSave, onDelete, toast, ToastUI, loading }) {
 
       <form onSubmit={handleSubmit}>
         <div className="form-grid">
-          {/* English */}
-          <Card icon="🇬🇧" title="English">
-            <Field label="Question (EN)" required>
-              <input
-                className="input" required
-                value={form.question_en}
-                onChange={e => updateField('question_en', e.target.value)}
-                placeholder="How do subscriptions work?"
+          {/* Left column: EN then ES */}
+          <div>
+            <Card icon="🇨🇦" title="English">
+              <Field label="Question (EN)" required>
+                <input
+                  className="input" required
+                  value={form.question_en}
+                  onChange={e => updateField('question_en', e.target.value)}
+                  placeholder="How do subscriptions work?"
+                />
+              </Field>
+              <MarkdownField
+                label="Answer (EN)"
+                value={form.answer_en}
+                onChange={v => updateField('answer_en', v)}
+                placeholder={"Our subscriptions are simple and flexible...\n\nYou can use **bold**, *italic*, [links](https://example.com), and - list items."}
+                minHeight={150}
               />
-            </Field>
-            <MarkdownField
-              label="Answer (EN)"
-              value={form.answer_en}
-              onChange={v => updateField('answer_en', v)}
-              placeholder={"Our subscriptions are simple and flexible...\n\nYou can use **bold**, *italic*, [links](https://example.com), and - list items."}
-              minHeight={150}
-            />
-          </Card>
+            </Card>
 
-          {/* Spanish */}
-          <Card icon="🇪🇸" title="Español">
-            <Field label="Pregunta (ES)">
-              <input
-                className="input"
-                value={form.question_es}
-                onChange={e => updateField('question_es', e.target.value)}
-                placeholder="¿Cómo funcionan las suscripciones?"
+            <Card icon="🇪🇸" title="Español">
+              <Field label="Pregunta (ES)">
+                <input
+                  className="input"
+                  value={form.question_es}
+                  onChange={e => updateField('question_es', e.target.value)}
+                  placeholder="¿Cómo funcionan las suscripciones?"
+                />
+              </Field>
+              <MarkdownField
+                label="Respuesta (ES)"
+                value={form.answer_es}
+                onChange={v => updateField('answer_es', v)}
+                placeholder={"Nuestras suscripciones son simples y flexibles..."}
+                minHeight={150}
               />
-            </Field>
-            <MarkdownField
-              label="Respuesta (ES)"
-              value={form.answer_es}
-              onChange={v => updateField('answer_es', v)}
-              placeholder={"Nuestras suscripciones son simples y flexibles..."}
-              minHeight={150}
-            />
-          </Card>
-        </div>
-
-        {/* Settings row */}
-        <Card icon="⚙️" title="Settings">
-          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <Field
-              label="Sort Order"
-              hint="Lower numbers appear first. Leave blank to append at end."
-            >
-              <input
-                className="input" type="number" min="1" step="1"
-                style={{ width: 100 }}
-                value={form.sort_order}
-                onChange={e => updateField('sort_order', e.target.value)}
-                placeholder={String(faqs.length + 1)}
-              />
-            </Field>
-            <div className="field" style={{ paddingTop: 22 }}>
-              <label className={`visible-toggle${form.visible ? ' visible-toggle--on' : ' visible-toggle--off'}`}>
-                <input type="checkbox" checked={!!form.visible} onChange={e => updateField('visible', e.target.checked)} />
-                <span className="visible-toggle__track" />
-                <span className="visible-toggle__label">{form.visible ? '✓ Visible on website' : '⚠ Hidden from website'}</span>
-              </label>
-            </div>
+            </Card>
           </div>
-        </Card>
+
+          {/* Right column: Settings */}
+          <div>
+            <Card icon="⚙️" title="Settings">
+              <Field
+                label="Sort Order"
+                hint="Lower numbers appear first. Leave blank to append at end."
+              >
+                <input
+                  className="input" type="number" min="1" step="1"
+                  style={{ width: 100 }}
+                  value={form.sort_order}
+                  onChange={e => updateField('sort_order', e.target.value)}
+                  placeholder={String(faqs.length + 1)}
+                />
+              </Field>
+              <div className="field">
+                <label className={`visible-toggle${form.visible ? ' visible-toggle--on' : ' visible-toggle--off'}`}>
+                  <input type="checkbox" checked={!!form.visible} onChange={e => updateField('visible', e.target.checked)} />
+                  <span className="visible-toggle__track" />
+                  <span className="visible-toggle__label">{form.visible ? '✓ Visible on website' : '⚠ Hidden from website'}</span>
+                </label>
+              </div>
+            </Card>
+          </div>
+        </div>
 
         <div className="form-actions-row">
           {!isNew

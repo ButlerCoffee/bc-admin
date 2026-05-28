@@ -704,7 +704,8 @@ export default function BlogPanel() {
                     <td>
                       <div style={{ fontWeight:600, fontSize:'0.9rem' }}>
                         {p.title_en || '(Untitled)'}
-                        {p.title_es && <span style={{ marginLeft:6, fontSize:'0.68rem', color:'var(--muted)', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:3, padding:'1px 5px' }}>ES</span>}
+                        {p.title_en && <span style={{ marginLeft:6, fontSize:'0.68rem', color:'var(--muted)', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:3, padding:'1px 5px' }}>🇨🇦 EN</span>}
+                        {p.title_es && <span style={{ marginLeft:4, fontSize:'0.68rem', color:'var(--muted)', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:3, padding:'1px 5px' }}>🇪🇸 ES</span>}
                       </div>
                       {p.excerpt_en && <div className="td-sub" style={{ color:'var(--muted)', fontSize:'0.78rem', maxWidth:440, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.excerpt_en}</div>}
                       <div className="td-sub" style={{ fontFamily:'monospace', fontSize:'0.72rem' }}>/blog/{p.slug}</div>
