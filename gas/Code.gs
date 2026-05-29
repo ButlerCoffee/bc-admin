@@ -654,8 +654,20 @@ function handleImportSubs(subs) {
 
 const SHEET_NAME_MACHINES = 'Machines'; // exact tab name
 
-// Column indices (0-based) — 36 existing + 6 image columns (AK–AP)
+// Column indices (0-based) — 36 existing + 6 image cols (AK–AP) + 10 website cols (AQ–AZ)
 // IMPORTANT: MC.PROFIT (col 11) and MC.MARGIN (col 12) are formula cells — NEVER overwrite them.
+//
+// ── New website columns (add these headers to your Machines sheet) ───────────
+//   AQ (42) = slug          e.g. "jura-we8"
+//   AR (43) = taglineEN     e.g. "The perfect first office machine."
+//   AS (44) = taglineES     e.g. "La máquina ideal para empezar en la oficina."
+//   AT (45) = tagEN         e.g. "Entry Office"
+//   AU (46) = tagES         e.g. "Oficina Básica"
+//   AV (47) = tagVariant    one of: yellow | outline | (blank = default)
+//   AW (48) = idealEN       e.g. "Teams of 5–20 people"
+//   AX (49) = idealES       e.g. "Equipos de 5–20 personas"
+//   AY (50) = specsEN       JSON array: [{"label":"Daily capacity","value":"30+ cups"},…]
+//   AZ (51) = specsES       JSON array: [{"label":"Capacidad diaria","value":"30+ tazas"},…]
 const MC = {
   ID:           0,
   PROVIDER:     1,
@@ -693,15 +705,26 @@ const MC = {
   FEAT04_ES:    33,
   FEAT05_ES:    34,
   FEAT06_ES:    35,
-  IMAGE1:       36,  // Add headers Image1–Image6 (cols AK–AP) to your sheet
+  IMAGE1:       36,  // cols AK–AP: Image1–Image6
   IMAGE2:       37,
   IMAGE3:       38,
   IMAGE4:       39,
   IMAGE5:       40,
-  IMAGE6:       41
+  IMAGE6:       41,
+  // Website display columns (AQ–AZ) — add headers to sheet before using
+  SLUG:         42,
+  TAGLINE_EN:   43,
+  TAGLINE_ES:   44,
+  TAG_EN:       45,
+  TAG_ES:       46,
+  TAG_VARIANT:  47,
+  IDEAL_EN:     48,
+  IDEAL_ES:     49,
+  SPECS_EN:     50,  // JSON string
+  SPECS_ES:     51,  // JSON string
 };
 
-const TOTAL_COLS_MACHINES = 42;
+const TOTAL_COLS_MACHINES = 52;
 
 function getSheetMachines() {
   return SpreadsheetApp.openById(SS_ID).getSheetByName(SHEET_NAME_MACHINES);
@@ -755,6 +778,17 @@ function rowToAppMachine(row) {
     image4:       String(row[MC.IMAGE4]        || ''),
     image5:       String(row[MC.IMAGE5]        || ''),
     image6:       String(row[MC.IMAGE6]        || ''),
+    // Website display fields
+    slug:         String(row[MC.SLUG]          || ''),
+    taglineEN:    String(row[MC.TAGLINE_EN]    || ''),
+    taglineES:    String(row[MC.TAGLINE_ES]    || ''),
+    tagEN:        String(row[MC.TAG_EN]        || ''),
+    tagES:        String(row[MC.TAG_ES]        || ''),
+    tagVariant:   String(row[MC.TAG_VARIANT]   || ''),
+    idealEN:      String(row[MC.IDEAL_EN]      || ''),
+    idealES:      String(row[MC.IDEAL_ES]      || ''),
+    specsEN:      String(row[MC.SPECS_EN]      || '[]'),
+    specsES:      String(row[MC.SPECS_ES]      || '[]'),
     updatedAt:    new Date().toISOString()
   };
 }
@@ -804,6 +838,17 @@ function applyToRowMachine(row, m) {
   row[MC.IMAGE4]        = m.image4       || '';
   row[MC.IMAGE5]        = m.image5       || '';
   row[MC.IMAGE6]        = m.image6       || '';
+  // Website display fields
+  row[MC.SLUG]          = m.slug         || '';
+  row[MC.TAGLINE_EN]    = m.taglineEN    || '';
+  row[MC.TAGLINE_ES]    = m.taglineES    || '';
+  row[MC.TAG_EN]        = m.tagEN        || '';
+  row[MC.TAG_ES]        = m.tagES        || '';
+  row[MC.TAG_VARIANT]   = m.tagVariant   || '';
+  row[MC.IDEAL_EN]      = m.idealEN      || '';
+  row[MC.IDEAL_ES]      = m.idealES      || '';
+  row[MC.SPECS_EN]      = m.specsEN      || '[]';
+  row[MC.SPECS_ES]      = m.specsES      || '[]';
   return row;
 }
 

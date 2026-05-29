@@ -87,6 +87,9 @@ const emptyMachine = {
   subtitleES: '', shortDescES: '', longDescES: '',
   feat01ES: '', feat02ES: '', feat03ES: '', feat04ES: '', feat05ES: '', feat06ES: '',
   image1: '', image2: '', image3: '', image4: '', image5: '', image6: '',
+  // Website display fields
+  slug: '', taglineEN: '', taglineES: '', tagEN: '', tagES: '',
+  tagVariant: '', idealEN: '', idealES: '', specsEN: '[]', specsES: '[]',
   updatedAt: ''
 };
 
@@ -881,6 +884,47 @@ export default function MachinesPanel() {
                     <input className="input input--mono" value={form.stripeLink} onChange={e => updateField('stripeLink', e.target.value)} placeholder="https://buy.stripe.com/…" />
                   </Field>
                   {form.stripeLink && <LinkBar link={form.stripeLink} />}
+                </Card>
+
+                <Card icon="🌐" title="Website Display">
+                  <Field label="Slug" hint="URL slug for this machine, e.g. jura-we8">
+                    <input className="input input--mono" value={form.slug} onChange={e => updateField('slug', e.target.value)} placeholder="jura-we8" />
+                  </Field>
+                  <div className="field-row">
+                    <Field label="Tag Label (EN)" hint="Card badge, e.g. Most Popular">
+                      <input className="input" value={form.tagEN} onChange={e => updateField('tagEN', e.target.value)} placeholder="Entry Office" />
+                    </Field>
+                    <Field label="Tag Label (ES)">
+                      <input className="input" value={form.tagES} onChange={e => updateField('tagES', e.target.value)} placeholder="Oficina Básica" />
+                    </Field>
+                  </div>
+                  <Field label="Tag Style" hint="Controls badge colour on card">
+                    <select className="input" value={form.tagVariant} onChange={e => updateField('tagVariant', e.target.value)}>
+                      <option value="">Default (grey)</option>
+                      <option value="yellow">Yellow (Most Popular)</option>
+                      <option value="outline">Outline (High Volume)</option>
+                    </select>
+                  </Field>
+                  <Field label="Tagline (EN)" hint="One-liner shown on the detail page">
+                    <input className="input" value={form.taglineEN} onChange={e => updateField('taglineEN', e.target.value)} placeholder="The perfect first office machine." />
+                  </Field>
+                  <Field label="Tagline (ES)">
+                    <input className="input" value={form.taglineES} onChange={e => updateField('taglineES', e.target.value)} placeholder="La máquina ideal para empezar…" />
+                  </Field>
+                  <Field label="Ideal For (EN)" hint="Shown on detail page, e.g. Teams of 5–20 people">
+                    <input className="input" value={form.idealEN} onChange={e => updateField('idealEN', e.target.value)} placeholder="Teams of 5–20 people" />
+                  </Field>
+                  <Field label="Ideal For (ES)">
+                    <input className="input" value={form.idealES} onChange={e => updateField('idealES', e.target.value)} placeholder="Equipos de 5–20 personas" />
+                  </Field>
+                  <Field label="Specs (EN)" hint='JSON array: [{"label":"Grinder","value":"Aroma G2"},…]'>
+                    <textarea className="textarea-input" style={{ minHeight:80, fontFamily:'monospace', fontSize:'0.75rem' }}
+                      value={form.specsEN} onChange={e => updateField('specsEN', e.target.value)} placeholder='[{"label":"Daily capacity","value":"30+ cups"}]' />
+                  </Field>
+                  <Field label="Specs (ES)">
+                    <textarea className="textarea-input" style={{ minHeight:80, fontFamily:'monospace', fontSize:'0.75rem' }}
+                      value={form.specsES} onChange={e => updateField('specsES', e.target.value)} placeholder='[{"label":"Capacidad diaria","value":"30+ tazas"}]' />
+                  </Field>
                 </Card>
               </div>
 
