@@ -8,7 +8,7 @@
  *  3. Deploy → Manage Deployments → Edit (pencil icon on your existing deployment)
  *     - Create a new version, click Deploy — the URL stays the same
  *  4. (First-time only) Set VITE_BUTLER_COFFEE_API_URL in Netlify env vars
- *
+ *  
  * ROUTING:
  *  GET  /exec                  → Coffee sheet
  *  GET  /exec?sheet=subs       → Subscription sheet
