@@ -328,7 +328,9 @@ function handleSave(coffee) {
   const data  = sheet.getDataRange().getValues();
 
   // Try to find an existing row whose sheet ID matches coffee.id
-  for (let i = 2; i < data.length; i++) {
+  // (skip the scan entirely for a blank id — see handleSaveMachine for why)
+  const hasRealId = coffee.id !== undefined && coffee.id !== null && String(coffee.id).trim() !== '';
+  if (hasRealId) for (let i = 2; i < data.length; i++) {
     if (String(data[i][C.ID]) === String(coffee.id)) {
       // Update in place — only overwrite app-managed columns
       const sheetRow = i + 1; // 1-based for Range
@@ -597,7 +599,8 @@ function handleSaveSub(sub) {
   const sheet = getSheetSubs();
   const data  = sheet.getDataRange().getValues();
 
-  for (let i = 2; i < data.length; i++) {
+  const hasRealId = sub.id !== undefined && sub.id !== null && String(sub.id).trim() !== '';
+  if (hasRealId) for (let i = 2; i < data.length; i++) {
     if (String(data[i][SC.ID]) === String(sub.id)) {
       const sheetRow   = i + 1;
       const updatedRow = applyToRowSub(ensureRowLength(copyRow(data[i]), TOTAL_COLS_SUBS), sub);
@@ -923,7 +926,14 @@ function handleSaveMachine(machine) {
   const sheet = getSheetMachines();
   const data  = sheet.getDataRange().getValues();
 
-  for (let i = 2; i < data.length; i++) {
+  // Guard: a brand-new machine has no id yet (client sends ''). Without this
+  // check, String(data[i][MC.ID]) === '' can match a blank/unformatted row
+  // further down the sheet (its ID cell is genuinely empty too), silently
+  // "updating" that blank row in place instead of appending a real new row
+  // with a fresh numeric ID — leaving the new machine with no ID at all.
+  const hasRealId = machine.id !== undefined && machine.id !== null && String(machine.id).trim() !== '';
+
+  if (hasRealId) for (let i = 2; i < data.length; i++) {
     if (String(data[i][MC.ID]) === String(machine.id)) {
       const sheetRow   = i + 1;
       const updatedRow = applyToRowMachine(ensureRowLength(copyRow(data[i]), TOTAL_COLS_MACHINES), machine);
@@ -1219,7 +1229,8 @@ function handleSaveBlogPost(post) {
   const data  = sheet.getDataRange().getValues();
 
   // Update existing post
-  for (let i = 1; i < data.length; i++) {
+  const hasRealId = post.id !== undefined && post.id !== null && String(post.id).trim() !== '';
+  if (hasRealId) for (let i = 1; i < data.length; i++) {
     if (String(data[i][BL.ID]) === String(post.id)) {
       const row = ensureRowLength(copyRow(data[i]), TOTAL_COLS_BLOG);
       applyToRowBlog(row, post);
@@ -1340,7 +1351,8 @@ function handleSaveFaq(faq) {
   var data  = sheet.getDataRange().getValues();
 
   // Update existing row
-  for (var i = 1; i < data.length; i++) {
+  var hasRealId = faq.id !== undefined && faq.id !== null && String(faq.id).trim() !== '';
+  if (hasRealId) for (var i = 1; i < data.length; i++) {
     if (String(data[i][FK.ID]) === String(faq.id)) {
       var row = ensureRowLength(copyRow(data[i]), TOTAL_COLS_FAQ);
       applyToRowFaq(row, faq);
