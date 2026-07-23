@@ -268,18 +268,6 @@ function doGet(e) {
 // ─── doPost — save / delete / import ─────────────────────────────────────────
 
 function doPost(e) {
-  // Serialize all writes — without this, two overlapping requests (e.g. a
-  // quick double-click, or a save firing while another request is still
-  // reading/writing the same sheet) can race on getDataRange()/setValues()
-  // and intermittently fail with an internal Sheets service error that
-  // never reaches our own try/catch below.
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(30000);
-  } catch (lockErr) {
-    return jsonOut({ ok: false, error: 'Server busy, please try again — ' + lockErr.message });
-  }
-
   try {
     const body = JSON.parse(e.postData.contents);
 
@@ -301,9 +289,10 @@ function doPost(e) {
 
     // Route to Machines handlers
     if (body.sheet === 'machines') {
-      if (body.action === 'save')   return handleSaveMachine(body.machine);
-      if (body.action === 'delete') return handleDeleteMachine(body.id);
-      if (body.action === 'import') return handleImportMachines(body.machines);
+      if (body.action === 'save')      return handleSaveMachine(body.machine);
+      if (body.action === 'delete')    return handleDeleteMachine(body.id);
+      if (body.action === 'import')    return handleImportMachines(body.machines);
+      if (body.action === 'translate') return doTranslateMachine(body);
       if (body.action === 'uploadImage') return handleUploadImage(body.filename, body.mimeType, body.data, 'Butler Machine Images', 'w900', MACHINES_IMAGE_FOLDER_ID);
       return jsonOut({ ok: false, error: 'Unknown machines action: ' + body.action });
     }
@@ -329,8 +318,6 @@ function doPost(e) {
     // Cloud logs — previously failures showed up there with no detail at all.
     console.error('doPost error: ' + err.message + '\n' + (err.stack || ''));
     return jsonOut({ ok: false, error: err.message });
-  } finally {
-    lock.releaseLock();
   }
 }
 
@@ -879,6 +866,39 @@ function applyToRowMachine(row, m) {
   row[MC.SPECS_EN]      = m.specsEN      || '[]';
   row[MC.SPECS_ES]      = m.specsES      || '[]';
   return row;
+}
+
+// ─── Machines Translate (generic field-map translator, bidirectional) ────────
+//
+// Accepts { from, to, fields: { key: value, ... } } and returns
+// { ok:true, data: { key: translatedValue, ... } } with the same keys.
+// The key 'longDesc' is treated as Markdown and translated paragraph-by-
+// paragraph (reusing translateParagraph, defined above for Blog) so that
+// #/##/-/> prefixes survive translation intact. Every other key is translated
+// as a single plain string via LanguageApp.
+
+function doTranslateMachine(body) {
+  if (!body) return jsonOut({ ok: false, error: 'doTranslateMachine must be called via POST, not run directly.' });
+  var from   = String(body.from || 'en');
+  var to     = String(body.to   || 'es');
+  var fields = body.fields || {};
+
+  try {
+    var result = {};
+    Object.keys(fields).forEach(function(key) {
+      var val = fields[key];
+      if (!val) { result[key] = ''; return; }
+      if (key === 'longDesc') {
+        var paras = String(val).split(/\n\n+/).filter(function(p) { return p.trim(); });
+        result[key] = paras.map(function(p) { return translateParagraph(p, from, to); }).join('\n\n');
+      } else {
+        result[key] = LanguageApp.translate(String(val), from, to);
+      }
+    });
+    return jsonOut({ ok: true, data: result });
+  } catch (e) {
+    return jsonOut({ ok: false, error: 'Translation failed: ' + e.message });
+  }
 }
 
 // ─── Machines doGet ───────────────────────────────────────────────────────────

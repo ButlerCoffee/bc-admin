@@ -76,6 +76,246 @@ function renderMarkdown(md) {
   }).join('');
 }
 
+// ── Detect content format ─────────────────────────────────────────────────────
+function isHtml(s) { return /^\s*<[a-zA-Z]/.test(s || ''); }
+
+// ── HTML → Markdown converter (used when toggling editor mode) ────────────────
+function htmlToMd(html) {
+  if (!html) return '';
+  if (!isHtml(html)) return html; // already markdown/plain text — pass through
+  let s = html;
+  s = s.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '\n\n# $1\n\n');
+  s = s.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '\n\n## $1\n\n');
+  s = s.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '\n\n### $1\n\n');
+  s = s.replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, '\n\n#### $1\n\n');
+  s = s.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '\n- $1');
+  s = s.replace(/<\/?(?:ul|ol)[^>]*>/gi, '\n');
+  s = s.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, '\n\n> $1\n\n');
+  s = s.replace(/<hr[^>]*\/?>/gi, '\n\n---\n\n');
+  s = s.replace(/<\/(?:p|div|section|article)>/gi, '\n\n');
+  s = s.replace(/<(?:p|div|section|article)[^>]*>/gi, '');
+  s = s.replace(/<br\s*\/?>/gi, '\n');
+  s = s.replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**');
+  s = s.replace(/<b[^>]*>([\s\S]*?)<\/b>/gi, '**$1**');
+  s = s.replace(/<em[^>]*>([\s\S]*?)<\/em>/gi, '*$1*');
+  s = s.replace(/<i[^>]*>([\s\S]*?)<\/i>/gi, '*$1*');
+  s = s.replace(/<s[^>]*>([\s\S]*?)<\/s>/gi, '~~$1~~');
+  s = s.replace(/<u[^>]*>([\s\S]*?)<\/u>/gi, '$1');
+  s = s.replace(/<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)');
+  s = s.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`');
+  s = s.replace(/<[^>]+>/g, '');
+  s = s.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&nbsp;/g,' ').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+  s = s.replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+  return s;
+}
+
+// ── Inject shared rich-text editor CSS (same block/id blog uses — deduped) ────
+function useRteStyles() {
+  useEffect(() => {
+    if (document.getElementById('blog-panel-styles')) return;
+    const el = document.createElement('style');
+    el.id = 'blog-panel-styles';
+    el.textContent = `
+      .re { border:1px solid var(--border); border-radius:var(--r); background:var(--card); }
+      .re__bar { display:flex; flex-wrap:wrap; align-items:center; gap:1px; padding:5px 8px; background:var(--bg); border-bottom:1px solid var(--border); min-height:38px; position:sticky; top:0; z-index:15; border-radius:var(--r) var(--r) 0 0; }
+      .re__btn { display:inline-flex; align-items:center; justify-content:center; min-width:28px; height:26px; padding:0 6px; border:none; border-radius:4px; cursor:pointer; background:transparent; color:var(--text); font-size:0.76rem; font-weight:700; transition:background 0.1s; }
+      .re__btn:hover { background:var(--border); }
+      .re__sep { width:1px; height:18px; background:var(--border); margin:0 4px; flex-shrink:0; }
+      .re__body { overflow-y:auto; padding:18px 20px; outline:none; font-size:0.93rem; line-height:1.82; color:var(--text); }
+      .re__body:empty::before { content:attr(data-ph); color:var(--muted); font-style:italic; pointer-events:none; display:block; }
+      .re__foot { padding:4px 12px; background:var(--bg); border-top:1px solid var(--border); font-size:0.72rem; color:var(--muted); border-radius:0 0 var(--r) var(--r); }
+      .ed-toggle { display:inline-flex; gap:2px; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:2px; margin-bottom:6px; }
+      .ed-toggle__btn { padding:3px 10px; border:none; border-radius:4px; cursor:pointer; background:transparent; color:var(--muted); font-size:0.72rem; font-weight:600; }
+      .ed-toggle__btn--active { background:var(--yellow); color:#7a6400; }
+      .bhtml { line-height:1.82; }
+      .bhtml p   { margin:0 0 1em; }
+      .bhtml p:last-child { margin-bottom:0; }
+      .bhtml h1  { font-family:var(--font-head); font-size:1.5rem;  font-weight:800; margin:1.6em 0 0.45em; line-height:1.2; }
+      .bhtml h2  { font-family:var(--font-head); font-size:1.2rem;  font-weight:700; margin:1.4em 0 0.4em; }
+      .bhtml h3  { font-family:var(--font-head); font-size:1rem;    font-weight:700; margin:1.2em 0 0.4em; }
+      .bhtml h4  { font-family:var(--font-head); font-weight:700; margin:1em 0 0.35em; }
+      .bhtml h1:first-child, .bhtml h2:first-child { margin-top:0; }
+      .bhtml ul, .bhtml ol { margin:0 0 1em 1.4em; }
+      .bhtml li  { margin-bottom:0.3em; }
+      .bhtml strong, .bhtml b { font-weight:700; }
+      .bhtml em,  .bhtml i { font-style:italic; }
+      .bhtml u  { text-decoration:underline; }
+      .bhtml s  { text-decoration:line-through; }
+      .bhtml a  { color:var(--text); text-decoration:underline; text-underline-offset:2px; }
+      .bhtml a:hover { opacity:0.7; }
+      .bhtml hr { border:none; border-top:1px solid var(--border); margin:2em 0; }
+      .bhtml blockquote { margin:1.2em 0; padding:14px 18px; border-left:3px solid var(--yellow); background:var(--bg); border-radius:0 var(--r) var(--r) 0; font-style:italic; color:var(--muted); }
+      .bhtml blockquote p { margin:0; }
+      .bhtml img  { max-width:100%; border-radius:var(--r); margin:0.5em 0; display:block; }
+      .bhtml table { width:100%; border-collapse:collapse; margin:1em 0; font-size:0.88rem; }
+      .bhtml th, .bhtml td { text-align:left; padding:8px 12px; border:1px solid var(--border); }
+      .bhtml th { background:var(--bg); font-weight:700; }
+      .bhtml code { font-family:monospace; font-size:0.88em; background:var(--bg); padding:1px 5px; border-radius:3px; border:1px solid var(--border); }
+      .bhtml pre  { background:#1e1e1e; color:#d4d4d4; padding:14px 18px; border-radius:var(--r); overflow-x:auto; margin:1em 0; font-size:0.83em; }
+      .bhtml pre code { background:none; border:none; padding:0; color:inherit; }
+    `;
+    document.head.appendChild(el);
+  }, []);
+}
+
+// ── Rich Text Editor (Visual / WYSIWYG) ───────────────────────────────────────
+function RichTextEditor({ value, onChange, resetKey, placeholder = 'Start writing…', minH = 300 }) {
+  const ref     = useRef(null);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const [wc, setWc] = useState('0 words');
+
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.innerHTML = valueRef.current || '';
+    refreshWc();
+  }, [resetKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { document.execCommand('defaultParagraphSeparator', false, 'p'); }, []);
+
+  function refreshWc() {
+    const txt = ref.current?.innerText || '';
+    setWc(`${txt.split(/\s+/).filter(Boolean).length} words · ${txt.length} chars`);
+  }
+
+  const nd   = fn => e => { e.preventDefault(); fn(); };
+  const exec  = (cmd, val = null) => document.execCommand(cmd, false, val);
+  const block = tag              => exec('formatBlock', `<${tag}>`);
+  const link  = ()               => { const u = prompt('URL (https://…):'); if (u) exec('createLink', u); };
+
+  const handleInput = () => { onChange(ref.current?.innerHTML || ''); refreshWc(); };
+
+  return (
+    <div className="re">
+      <div className="re__bar">
+        <button type="button" className="re__btn" title="Normal"     onMouseDown={nd(() => block('p'))}>P</button>
+        <button type="button" className="re__btn" title="Heading 1"  onMouseDown={nd(() => block('h1'))}>H1</button>
+        <button type="button" className="re__btn" title="Heading 2"  onMouseDown={nd(() => block('h2'))}>H2</button>
+        <button type="button" className="re__btn" title="Heading 3"  onMouseDown={nd(() => block('h3'))}>H3</button>
+        <div className="re__sep" />
+        <button type="button" className="re__btn" title="Bold (⌘B)"       onMouseDown={nd(() => exec('bold'))}><i className="fa-solid fa-bold" /></button>
+        <button type="button" className="re__btn" title="Italic (⌘I)"     onMouseDown={nd(() => exec('italic'))}><i className="fa-solid fa-italic" /></button>
+        <button type="button" className="re__btn" title="Underline (⌘U)"  onMouseDown={nd(() => exec('underline'))}><i className="fa-solid fa-underline" /></button>
+        <button type="button" className="re__btn" title="Strikethrough"   onMouseDown={nd(() => exec('strikeThrough'))}><i className="fa-solid fa-strikethrough" /></button>
+        <div className="re__sep" />
+        <button type="button" className="re__btn" title="Bullet list"     onMouseDown={nd(() => exec('insertUnorderedList'))}><i className="fa-solid fa-list-ul" /></button>
+        <button type="button" className="re__btn" title="Numbered list"   onMouseDown={nd(() => exec('insertOrderedList'))}><i className="fa-solid fa-list-ol" /></button>
+        <div className="re__sep" />
+        <button type="button" className="re__btn" title="Block quote"     onMouseDown={nd(() => block('blockquote'))}><i className="fa-solid fa-quote-left" /></button>
+        <button type="button" className="re__btn" title="Divider"         onMouseDown={nd(() => exec('insertHorizontalRule'))}><i className="fa-solid fa-minus" /></button>
+        <button type="button" className="re__btn" title="Insert link"     onMouseDown={nd(link)}><i className="fa-solid fa-link" /></button>
+        <div className="re__sep" />
+        <button type="button" className="re__btn" title="Align left"      onMouseDown={nd(() => exec('justifyLeft'))}><i className="fa-solid fa-align-left" /></button>
+        <button type="button" className="re__btn" title="Align center"    onMouseDown={nd(() => exec('justifyCenter'))}><i className="fa-solid fa-align-center" /></button>
+        <button type="button" className="re__btn" title="Align right"     onMouseDown={nd(() => exec('justifyRight'))}><i className="fa-solid fa-align-right" /></button>
+        <div style={{ flex:1 }} />
+        <button type="button" className="re__btn" title="Undo (⌘Z)"       onMouseDown={nd(() => exec('undo'))}><i className="fa-solid fa-rotate-left" /></button>
+        <button type="button" className="re__btn" title="Redo (⌘⇧Z)"      onMouseDown={nd(() => exec('redo'))}><i className="fa-solid fa-rotate-right" /></button>
+        <div className="re__sep" />
+        <button type="button" className="re__btn" title="Clear formatting" onMouseDown={nd(() => exec('removeFormat'))}><i className="fa-solid fa-eraser" /></button>
+      </div>
+      <div ref={ref} className="re__body bhtml" contentEditable suppressContentEditableWarning
+        onInput={handleInput} data-ph={placeholder} style={{ minHeight: minH }} />
+      <div className="re__foot">{wc}</div>
+    </div>
+  );
+}
+
+// ── Markdown editor — Write tab (raw) + Preview tab (rendered) ───────────────
+function MarkdownEditor({ value, onChange, placeholder, minH = 300 }) {
+  const [tab, setTab] = useState('write');
+  const txt = value || '';
+  const wc  = txt.split(/\s+/).filter(Boolean).length;
+  return (
+    <div style={{ border:'1px solid var(--border)', borderRadius:'var(--r)', overflow:'hidden' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:2, padding:'4px 8px', background:'var(--bg)', borderBottom:'1px solid var(--border)' }}>
+        {[['write','fa-pen','Write'],['preview','fa-eye','Preview']].map(([t, icon, label]) => (
+          <button key={t} type="button" onClick={() => setTab(t)} style={{
+            padding:'2px 10px', borderRadius:4, border:'none', cursor:'pointer',
+            background: tab === t ? 'var(--card)' : 'transparent',
+            color:      tab === t ? 'var(--text)' : 'var(--muted)',
+            fontWeight: tab === t ? 700 : 400,
+            fontSize:'0.73rem',
+            boxShadow:  tab === t ? '0 1px 3px rgba(0,0,0,0.07)' : 'none',
+          }}>
+            <i className={`fa-solid ${icon}`} style={{ marginRight:4, fontSize:'0.7rem' }} />{label}
+          </button>
+        ))}
+        <span style={{ marginLeft:'auto', fontSize:'0.68rem', color:'var(--muted)', opacity:0.65, fontFamily:'monospace' }}>
+          **bold** · *italic* · # H1 · ## H2 · - list · &gt; quote · ---
+        </span>
+      </div>
+      {tab === 'write' && (
+        <textarea
+          className="textarea-input"
+          value={txt}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={{ minHeight:minH, borderRadius:0, border:'none', resize:'vertical',
+                   fontFamily:'monospace', fontSize:'0.87rem', lineHeight:1.7, padding:'16px',
+                   display:'block', width:'100%', boxSizing:'border-box' }}
+        />
+      )}
+      {tab === 'preview' && (
+        <div className="bhtml"
+          style={{ minHeight:minH, padding:'18px 20px', fontSize:'0.93rem', lineHeight:1.82, color:'var(--text)' }}
+          dangerouslySetInnerHTML={{ __html:
+            renderMarkdown(txt) ||
+            `<p style="color:var(--muted);font-style:italic">${placeholder || 'Nothing to preview yet.'}</p>`
+          }}
+        />
+      )}
+      <div style={{ padding:'4px 12px', background:'var(--bg)', borderTop:'1px solid var(--border)', fontSize:'0.72rem', color:'var(--muted)', display:'flex', gap:16 }}>
+        <span>{wc} words</span><span>{txt.length} chars</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Content editor with Visual / Markdown toggle ──────────────────────────────
+function ContentEditor({ value, onChange, mode, onModeChange, resetKey, placeholder, minH = 300 }) {
+  function handleModeChange(newMode) {
+    if (newMode === 'markdown' && isHtml(value)) {
+      onChange(htmlToMd(value));
+    }
+    onModeChange(newMode);
+  }
+  return (
+    <div>
+      <div className="ed-toggle">
+        <button type="button" className={`ed-toggle__btn${mode === 'wysiwyg'   ? ' ed-toggle__btn--active' : ''}`} onClick={() => handleModeChange('wysiwyg')}>
+          <i className="fa-solid fa-wand-magic-sparkles" style={{ marginRight:4 }} />Visual
+        </button>
+        <button type="button" className={`ed-toggle__btn${mode === 'markdown'  ? ' ed-toggle__btn--active' : ''}`} onClick={() => handleModeChange('markdown')}>
+          <i className="fa-solid fa-hashtag" style={{ marginRight:4 }} />Markdown
+        </button>
+      </div>
+      {mode === 'wysiwyg'
+        ? <RichTextEditor value={value} onChange={onChange} resetKey={`${resetKey}-v`} placeholder={placeholder} minH={minH} />
+        : <MarkdownEditor value={value} onChange={onChange} placeholder={placeholder} minH={minH} />
+      }
+    </div>
+  );
+}
+
+// ── Translate button ──────────────────────────────────────────────────────────
+function TranslateBtn({ label, onClick, loading }) {
+  return (
+    <button type="button" disabled={loading} onClick={onClick} style={{
+      display:'inline-flex', alignItems:'center', gap:6, padding:'4px 12px',
+      borderRadius:'var(--r)', border:'1px solid var(--border)',
+      background: loading ? 'var(--bg)' : 'var(--card)',
+      cursor: loading ? 'not-allowed' : 'pointer',
+      fontSize:'0.78rem', fontWeight:600, color:'var(--text)', opacity: loading ? 0.6 : 1,
+    }}>
+      {loading
+        ? <><i className="fa-solid fa-circle-notch fa-spin" /> Translating…</>
+        : <><i className="fa-solid fa-language" /> {label}</>
+      }
+    </button>
+  );
+}
+
 // ── Data model ────────────────────────────────────────────────────────────────
 const emptyMachine = {
   id: '', provider: '', brand: '', name: '', model: '', category: '',
@@ -117,12 +357,13 @@ function LinkBar({ link }) {
 }
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
-function Card({ icon, title, children }) {
+function Card({ icon, title, children, right }) {
   return (
     <div className="card">
       <div className="card__header">
         <span className="card__icon">{icon}</span>
         <span className="card__title">{title}</span>
+        {right && <span style={{ marginLeft:'auto' }}>{right}</span>}
       </div>
       <div className="card__body">{children}</div>
     </div>
@@ -244,6 +485,8 @@ function ImageGrid({ form, updateField }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MachinesPanel() {
+  useRteStyles();
+
   // ── URL routing ────────────────────────────────────────────────────────────
   const { '*': splat = '' } = useParams();
   const navigate = useNavigate();
@@ -265,6 +508,7 @@ export default function MachinesPanel() {
   // ── Data state ─────────────────────────────────────────────────────────────
   const [machines,  setMachines]  = useState([]);
   const [loading,   setLoading]   = useState(false);
+  const [translating, setTranslating] = useState(false); // 'en'|'es'|false
   const [toasts,    setToasts]    = useState([]);
   const [form,      setForm]      = useState(emptyMachine);
   const [search,      setSearch]      = useState('');
@@ -272,6 +516,10 @@ export default function MachinesPanel() {
   const [areaFilter,  setAreaFilter]  = useState('');
   const [pendingDeleteId,   setPendingDeleteId]   = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [modeEN,  setModeEN]  = useState('wysiwyg'); // longDescEN editor format
+  const [modeES,  setModeES]  = useState('wysiwyg'); // longDescES editor format
+  const [resetEN, setResetEN] = useState(0);
+  const [resetES, setResetES] = useState(0);
 
   // ── Form initialization ────────────────────────────────────────────────────
   // Track which ID the form was last initialized for so we don't reset mid-edit.
@@ -289,6 +537,11 @@ export default function MachinesPanel() {
     if (currentId && !machine) return; // ID not found yet — still loading
 
     setForm(machine ? { ...emptyMachine, ...machine } : { ...emptyMachine });
+    // Default to Markdown. Only switch to Visual if the saved content is HTML.
+    setModeEN(isHtml(machine?.longDescEN) ? 'wysiwyg' : 'markdown');
+    setModeES(isHtml(machine?.longDescES) ? 'wysiwyg' : 'markdown');
+    setResetEN(c => c + 1);
+    setResetES(c => c + 1);
     formKeyRef.current = key;
     window.scrollTo(0, 0);
   }, [mode, currentId, machines]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -354,6 +607,53 @@ export default function MachinesPanel() {
     setForm(f => ({ ...f, [key]: value }));
   }
 
+  // ── Translation (bidirectional, mirrors BlogPanel) ────────────────────────
+  async function autoTranslate(from, to) {
+    const isFromEN = from === 'en';
+    const suffixFrom = isFromEN ? 'EN' : 'ES';
+    const suffixTo   = isFromEN ? 'ES' : 'EN';
+    const lang = isFromEN ? 'English' : 'Spanish';
+
+    const src = {
+      subtitle: form[`subtitle${suffixFrom}`],
+      shortDesc: form[`shortDesc${suffixFrom}`],
+      longDesc: form[`longDesc${suffixFrom}`],
+      feat01: form[`feat01${suffixFrom}`],
+      feat02: form[`feat02${suffixFrom}`],
+      feat03: form[`feat03${suffixFrom}`],
+      feat04: form[`feat04${suffixFrom}`],
+      feat05: form[`feat05${suffixFrom}`],
+      feat06: form[`feat06${suffixFrom}`],
+    };
+
+    if (!Object.values(src).some(Boolean)) {
+      toast(`Write the ${lang} version first, then translate.`, 'error');
+      return;
+    }
+
+    setTranslating(to);
+    try {
+      const result = await apiCall('POST', { action: 'translate', from, to, fields: src }, 'machines');
+      setForm(f => ({
+        ...f,
+        [`subtitle${suffixTo}`]:  result.subtitle  || f[`subtitle${suffixTo}`],
+        [`shortDesc${suffixTo}`]: result.shortDesc || f[`shortDesc${suffixTo}`],
+        [`longDesc${suffixTo}`]:  result.longDesc  || f[`longDesc${suffixTo}`],
+        [`feat01${suffixTo}`]:    result.feat01    || f[`feat01${suffixTo}`],
+        [`feat02${suffixTo}`]:    result.feat02    || f[`feat02${suffixTo}`],
+        [`feat03${suffixTo}`]:    result.feat03    || f[`feat03${suffixTo}`],
+        [`feat04${suffixTo}`]:    result.feat04    || f[`feat04${suffixTo}`],
+        [`feat05${suffixTo}`]:    result.feat05    || f[`feat05${suffixTo}`],
+        [`feat06${suffixTo}`]:    result.feat06    || f[`feat06${suffixTo}`],
+      }));
+      // GAS always returns plain text → Markdown mode for the target editor
+      if (to === 'es') { setModeES('markdown'); setResetES(c => c + 1); }
+      else              { setModeEN('markdown'); setResetEN(c => c + 1); }
+      toast(`Translated to ${to === 'es' ? 'Spanish 🇪🇸' : 'English 🇨🇦'}! Review and edit as needed.`);
+    } catch (err) {
+      toast(`Translation failed — ${err.message}`, 'error');
+    } finally { setTranslating(false); }
+  }
 
   async function saveMachine(e) {
     e.preventDefault();
@@ -752,19 +1052,34 @@ export default function MachinesPanel() {
                   </div>
                 </Card>
 
-                <Card icon="📖" title="Content (EN) 🇨🇦">
+                <Card
+                  icon="📖"
+                  title="Content (EN) 🇨🇦"
+                  right={
+                    <TranslateBtn
+                      label="Translate from ES 🇪🇸"
+                      loading={translating === 'en'}
+                      onClick={() => autoTranslate('es', 'en')}
+                    />
+                  }
+                >
                   <Field label="Subtitle (EN)">
                     <input className="input" value={form.subtitleEN} onChange={e => updateField('subtitleEN', e.target.value)} placeholder="Short tagline…" />
                   </Field>
                   <Field label="Short Description (EN)">
                     <input className="input" value={form.shortDescEN} onChange={e => updateField('shortDescEN', e.target.value)} placeholder="One-liner for cards…" />
                   </Field>
-                  <MarkdownField
-                    label="Long Description (EN)"
-                    value={form.longDescEN}
-                    onChange={v => updateField('longDescEN', v)}
-                    placeholder="Full product description…"
-                  />
+                  <Field label="Long Description (EN)">
+                    <ContentEditor
+                      value={form.longDescEN}
+                      onChange={v => updateField('longDescEN', v)}
+                      mode={modeEN}
+                      onModeChange={setModeEN}
+                      resetKey={resetEN}
+                      placeholder="Full product description…"
+                      minH={220}
+                    />
+                  </Field>
                   <div className="field-row" style={{ gap:8 }}>
                     {['feat01EN','feat02EN','feat03EN','feat04EN','feat05EN','feat06EN'].map((k, i) => (
                       <Field key={k} label={`Feature ${i+1} (EN)`}>
@@ -774,19 +1089,34 @@ export default function MachinesPanel() {
                   </div>
                 </Card>
 
-                <Card icon="📖" title="Content (ES) 🇪🇸">
+                <Card
+                  icon="📖"
+                  title="Content (ES) 🇪🇸"
+                  right={
+                    <TranslateBtn
+                      label="Translate from EN 🇨🇦"
+                      loading={translating === 'es'}
+                      onClick={() => autoTranslate('en', 'es')}
+                    />
+                  }
+                >
                   <Field label="Subtítulo (ES)">
                     <input className="input" value={form.subtitleES} onChange={e => updateField('subtitleES', e.target.value)} placeholder="Subtítulo corto…" />
                   </Field>
                   <Field label="Descripción corta (ES)">
                     <input className="input" value={form.shortDescES} onChange={e => updateField('shortDescES', e.target.value)} placeholder="Una línea para tarjetas…" />
                   </Field>
-                  <MarkdownField
-                    label="Descripción larga (ES)"
-                    value={form.longDescES}
-                    onChange={v => updateField('longDescES', v)}
-                    placeholder="Descripción completa del producto…"
-                  />
+                  <Field label="Descripción larga (ES)">
+                    <ContentEditor
+                      value={form.longDescES}
+                      onChange={v => updateField('longDescES', v)}
+                      mode={modeES}
+                      onModeChange={setModeES}
+                      resetKey={resetES}
+                      placeholder="Descripción completa del producto…"
+                      minH={220}
+                    />
+                  </Field>
                   <div className="field-row" style={{ gap:8 }}>
                     {['feat01ES','feat02ES','feat03ES','feat04ES','feat05ES','feat06ES'].map((k, i) => (
                       <Field key={k} label={`Característica ${i+1} (ES)`}>
@@ -946,10 +1276,10 @@ export default function MachinesPanel() {
       )}
 
       {/* ── Loading overlay ───────────────────────────────────────────────────── */}
-      {loading && (
+      {(loading || translating) && (
         <div className="loading-overlay" style={{ display:'flex' }}>
           <div className="loading-spinner" />
-          <div className="loading-label">Syncing with Google Sheet…</div>
+          <div className="loading-label">{translating ? 'Translating…' : 'Syncing with Google Sheet…'}</div>
         </div>
       )}
 
