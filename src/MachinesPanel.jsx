@@ -35,6 +35,33 @@ function toImageUrl(url) {
   return url;
 }
 
+// ── Client-side image compression (canvas → JPEG base64) ─────────────────────
+// Keeps drag-and-drop uploads small/fast before they go over the wire as a
+// base64 POST body (same pattern used for Blog images).
+function compressImage(file, maxPx = 1600, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const blobUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(blobUrl);
+      const scale  = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width  * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]); // base64 only
+        reader.onerror   = reject;
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = reject;
+    img.src = blobUrl;
+  });
+}
+
 // ── Pricing helpers ───────────────────────────────────────────────────────────
 function fmtMoney(v) {
   if (v === '' || v === null || v === undefined) return '';
@@ -210,34 +237,95 @@ function ImageGallery({ machine }) {
 }
 
 // ── Image Grid (form mode) ────────────────────────────────────────────────────
-function ImageGrid({ form, updateField }) {
+// Each tile is a drop zone: drag a photo from your computer straight onto it
+// to upload to Drive (auto-compressed to JPEG), or click it to browse.
+// The URL field underneath still works as a manual paste/override.
+function ImageGrid({ form, updateField, onUpload, uploadingKey }) {
+  const [dragKey, setDragKey] = useState(null);
+
+  function handleDragOver(e, key) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    if (dragKey !== key) setDragKey(key);
+  }
+  function handleDragLeave(e, key) {
+    e.preventDefault();
+    if (dragKey === key) setDragKey(null);
+  }
+  function handleDrop(e, key) {
+    e.preventDefault();
+    setDragKey(null);
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) onUpload(file, key);
+  }
+
   return (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-      {IMAGE_KEYS.map((key, i) => (
-        <div key={key} style={{ display:'flex', flexDirection:'column', gap:6 }}>
-          <div style={{ fontSize:'0.75rem', color:'var(--muted)', fontWeight:600 }}>Image {i+1}{i===0 ? ' (Hero)' : ''}</div>
-          {/* Preview */}
-          <div style={{ aspectRatio:'4/3', borderRadius:8, overflow:'hidden', background:'var(--surface-2)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-            {form[key]
-              ? <img src={toImageUrl(form[key])} alt={`preview ${i+1}`} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} onError={e => { e.currentTarget.style.display='none'; }} />
-              : <span style={{ color:'var(--muted)', fontSize:'0.75rem' }}>Empty</span>
-            }
+      {IMAGE_KEYS.map((key, i) => {
+        const isDragging  = dragKey === key;
+        const isUploading = uploadingKey === key;
+        return (
+          <div key={key} style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            <div style={{ fontSize:'0.75rem', color:'var(--muted)', fontWeight:600 }}>Image {i+1}{i===0 ? ' (Hero)' : ''}</div>
+
+            {/* Drop zone / preview */}
+            <label
+              onDragOver={e => handleDragOver(e, key)}
+              onDragLeave={e => handleDragLeave(e, key)}
+              onDrop={e => handleDrop(e, key)}
+              style={{
+                position: 'relative',
+                aspectRatio: '4/3',
+                borderRadius: 8,
+                overflow: 'hidden',
+                background: 'var(--surface-2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                border: isDragging ? '2px dashed var(--accent, #f5b400)' : '2px dashed transparent',
+                transition: 'border-color 0.12s',
+              }}
+              title="Drag a photo here, or click to browse"
+            >
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display:'none' }}
+                onChange={e => { if (e.target.files[0]) onUpload(e.target.files[0], key); e.target.value = ''; }}
+              />
+              {form[key]
+                ? <img src={toImageUrl(form[key])} alt={`preview ${i+1}`} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} onError={e => { e.currentTarget.style.display='none'; }} />
+                : <span style={{ color:'var(--muted)', fontSize:'0.75rem', textAlign:'center', padding:'0 8px' }}>
+                    {isDragging ? 'Drop to upload' : 'Drag a photo here or click'}
+                  </span>
+              }
+              {isUploading && (
+                <div style={{
+                  position:'absolute', inset:0, background:'rgba(0,0,0,0.45)',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                }}>
+                  <i className="fa-solid fa-circle-notch fa-spin" style={{ color:'#fff', fontSize:'1.2rem' }} />
+                </div>
+              )}
+            </label>
+
+            {/* URL Input (manual paste/override) */}
+            <input
+              className="input input--mono"
+              type="text"
+              value={form[key]}
+              onChange={e => updateField(key, e.target.value)}
+              placeholder="Drive URL or file ID…"
+              style={{ fontSize:'0.72rem' }}
+            />
+            {form[key] && (
+              <button type="button" className="btn btn--ghost btn--sm" style={{ fontSize:'0.72rem', padding:'2px 6px' }}
+                onClick={() => updateField(key, '')}>✕ Clear</button>
+            )}
           </div>
-          {/* URL Input */}
-          <input
-            className="input input--mono"
-            type="text"
-            value={form[key]}
-            onChange={e => updateField(key, e.target.value)}
-            placeholder="Drive URL or file ID…"
-            style={{ fontSize:'0.72rem' }}
-          />
-          {form[key] && (
-            <button type="button" className="btn btn--ghost btn--sm" style={{ fontSize:'0.72rem', padding:'2px 6px' }}
-              onClick={() => updateField(key, '')}>✕ Clear</button>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -272,6 +360,7 @@ export default function MachinesPanel() {
   const [areaFilter,  setAreaFilter]  = useState('');
   const [pendingDeleteId,   setPendingDeleteId]   = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [uploadingKey,      setUploadingKey]      = useState(null);
 
   // ── Form initialization ────────────────────────────────────────────────────
   // Track which ID the form was last initialized for so we don't reset mid-edit.
@@ -352,6 +441,27 @@ export default function MachinesPanel() {
   // ── Form helpers ───────────────────────────────────────────────────────────
   function updateField(key, value) {
     setForm(f => ({ ...f, [key]: value }));
+  }
+
+  // Drag-and-drop / click-to-browse image upload → Drive, URL lands in the
+  // given image field (image1…image6) automatically.
+  async function uploadMachineImage(file, key) {
+    setUploadingKey(key);
+    try {
+      const base64 = await compressImage(file);
+      const result = await apiCall('POST', {
+        action:   'uploadImage',
+        filename: file.name.replace(/\.[^.]+$/, '') + '.jpg',
+        mimeType: 'image/jpeg',
+        data:     base64,
+      }, 'machines');
+      updateField(key, result.url);
+      toast('Image uploaded!');
+    } catch (err) {
+      toast(`Upload failed — ${err.message}`, 'error');
+    } finally {
+      setUploadingKey(null);
+    }
   }
 
   async function saveMachine(e) {
@@ -806,7 +916,7 @@ export default function MachinesPanel() {
                       📂 Open image folder
                     </a>
                   </div>
-                  <ImageGrid form={form} updateField={updateField} />
+                  <ImageGrid form={form} updateField={updateField} onUpload={uploadMachineImage} uploadingKey={uploadingKey} />
                 </Card>
 
                 <Card icon="💶" title="Pricing">

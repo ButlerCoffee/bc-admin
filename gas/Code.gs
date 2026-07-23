@@ -23,6 +23,11 @@
 const SS_ID    = '1nT5v6u7pz8qv1cloSDT7GpDDfodXk1LID8rMeRkzIeY';
 const SHEET_NAME = 'Coffee';
 
+// Existing Drive folder machine photos already live in (pasted-URL uploads
+// go here today) — uploadImage for machines targets this folder by ID so
+// drag-and-drop uploads land alongside them instead of creating a new folder.
+const MACHINES_IMAGE_FOLDER_ID = '1Ek32YHfrAmUryNTp4oz7Sz02tE4Jerz5';
+
 // ─── Column indices (0-based) in the Coffee sheet ────────────────────────────
 const C = {
   ID:           0,
@@ -287,6 +292,7 @@ function doPost(e) {
       if (body.action === 'save')   return handleSaveMachine(body.machine);
       if (body.action === 'delete') return handleDeleteMachine(body.id);
       if (body.action === 'import') return handleImportMachines(body.machines);
+      if (body.action === 'uploadImage') return handleUploadImage(body.filename, body.mimeType, body.data, 'Butler Machine Images', 'w900', MACHINES_IMAGE_FOLDER_ID);
       return jsonOut({ ok: false, error: 'Unknown machines action: ' + body.action });
     }
 
@@ -369,16 +375,22 @@ function handleDelete(id) {
  * @param {string} [folderName] — defaults to 'Butler Coffee Images'
  * @param {string} [sz]         — thumbnail size, e.g. 'w800', 'w1200' (default 'w800')
  */
-function handleUploadImage(filename, mimeType, base64data, folderName, sz) {
+function handleUploadImage(filename, mimeType, base64data, folderName, sz, folderId) {
   try {
     const bytes  = Utilities.base64Decode(base64data);
     const blob   = Utilities.newBlob(bytes, mimeType, filename || 'butler-image');
     const name   = folderName || 'Butler Coffee Images';
     const size   = sz || 'w800';
 
-    // Find or create the target folder
-    const it     = DriveApp.getFoldersByName(name);
-    const folder = it.hasNext() ? it.next() : DriveApp.createFolder(name);
+    // Prefer an explicit folder ID (guarantees files land in a specific,
+    // already-established Drive folder) — fall back to find-or-create by name.
+    let folder;
+    if (folderId) {
+      folder = DriveApp.getFolderById(folderId);
+    } else {
+      const it = DriveApp.getFoldersByName(name);
+      folder = it.hasNext() ? it.next() : DriveApp.createFolder(name);
+    }
 
     const file   = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
