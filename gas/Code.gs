@@ -8,7 +8,7 @@
  *  3. Deploy → Manage Deployments → Edit (pencil icon on your existing deployment)
  *     - Create a new version, click Deploy — the URL stays the same
  *  4. (First-time only) Set VITE_BUTLER_COFFEE_API_URL in Netlify env vars
- *  
+ *
  * ROUTING:
  *  GET  /exec                  → Coffee sheet
  *  GET  /exec?sheet=subs       → Subscription sheet
@@ -268,6 +268,18 @@ function doGet(e) {
 // ─── doPost — save / delete / import ─────────────────────────────────────────
 
 function doPost(e) {
+  // Serialize all writes — without this, two overlapping requests (e.g. a
+  // quick double-click, or a save firing while another request is still
+  // reading/writing the same sheet) can race on getDataRange()/setValues()
+  // and intermittently fail with an internal Sheets service error that
+  // never reaches our own try/catch below.
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (lockErr) {
+    return jsonOut({ ok: false, error: 'Server busy, please try again — ' + lockErr.message });
+  }
+
   try {
     const body = JSON.parse(e.postData.contents);
 
@@ -313,7 +325,12 @@ function doPost(e) {
 
     return jsonOut({ ok: false, error: 'Unknown action: ' + body.action });
   } catch (err) {
+    // Log the real exception (with stack) so it's visible in Executions →
+    // Cloud logs — previously failures showed up there with no detail at all.
+    console.error('doPost error: ' + err.message + '\n' + (err.stack || ''));
     return jsonOut({ ok: false, error: err.message });
+  } finally {
+    lock.releaseLock();
   }
 }
 
