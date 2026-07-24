@@ -330,6 +330,7 @@ const emptyMachine = {
   // Website display fields
   slug: '', taglineEN: '', taglineES: '', tagEN: '', tagES: '',
   tagVariant: '', idealEN: '', idealES: '', specsEN: '[]', specsES: '[]',
+  sheetEN: '', sheetES: '',
   updatedAt: ''
 };
 
@@ -986,6 +987,24 @@ export default function MachinesPanel() {
               {currentMachine.stripeLink && (
                 <Card icon="💳" title="Stripe Payment Link">
                   <LinkBar link={currentMachine.stripeLink} />
+                </Card>
+              )}
+
+              {/* Product Sheets */}
+              {(currentMachine.sheetEN || currentMachine.sheetES) && (
+                <Card icon="📄" title="Product Sheets">
+                  {currentMachine.sheetEN && (
+                    <div style={{ marginBottom: currentMachine.sheetES ? 10 : 0 }}>
+                      <div style={{ fontSize:'0.72rem', color:'var(--muted)', fontWeight:600, marginBottom:4 }}>English</div>
+                      <LinkBar link={currentMachine.sheetEN} />
+                    </div>
+                  )}
+                  {currentMachine.sheetES && (
+                    <div>
+                      <div style={{ fontSize:'0.72rem', color:'var(--muted)', fontWeight:600, marginBottom:4 }}>Español</div>
+                      <LinkBar link={currentMachine.sheetES} />
+                    </div>
+                  )}
                 </Card>
               )}
             </div>

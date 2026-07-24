@@ -3,7 +3,7 @@
  * Spreadsheet: https://docs.google.com/spreadsheets/d/1nT5v6u7pz8qv1cloSDT7GpDDfodXk1LID8rMeRkzIeY
  *
  * DEPLOY:
- *  1.  Open Extensions → Apps Script in the spreadsheet
+ *  1.  Open the  Extensions → Apps Script in the spreadsheet
  *  2. Paste this entire file, replacing any existing code
  *  3. Deploy → Manage Deployments → Edit (pencil icon on your existing deployment)
  *     - Create a new version, click Deploy — the URL stays the same
@@ -741,9 +741,11 @@ const MC = {
   IDEAL_ES:     49,
   SPECS_EN:     50,  // JSON string
   SPECS_ES:     51,  // JSON string
+  SHEET_EN:     52,  // Drive link to English product-sheet PDF
+  SHEET_ES:     53,  // Drive link to Spanish product-sheet PDF
 };
 
-const TOTAL_COLS_MACHINES = 52;
+const TOTAL_COLS_MACHINES = 54;
 
 function getSheetMachines() {
   return SpreadsheetApp.openById(SS_ID).getSheetByName(SHEET_NAME_MACHINES);
@@ -808,6 +810,8 @@ function rowToAppMachine(row) {
     idealES:      String(row[MC.IDEAL_ES]      || ''),
     specsEN:      String(row[MC.SPECS_EN]      || '[]'),
     specsES:      String(row[MC.SPECS_ES]      || '[]'),
+    sheetEN:      String(row[MC.SHEET_EN]      || ''),
+    sheetES:      String(row[MC.SHEET_ES]      || ''),
     updatedAt:    new Date().toISOString()
   };
 }
@@ -868,6 +872,8 @@ function applyToRowMachine(row, m) {
   row[MC.IDEAL_ES]      = m.idealES      || '';
   row[MC.SPECS_EN]      = m.specsEN      || '[]';
   row[MC.SPECS_ES]      = m.specsES      || '[]';
+  row[MC.SHEET_EN]      = m.sheetEN      || '';
+  row[MC.SHEET_ES]      = m.sheetES      || '';
   return row;
 }
 
