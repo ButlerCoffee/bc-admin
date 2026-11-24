@@ -9,6 +9,15 @@
  *     - Create a new version, click Deploy — the URL stays the same
  *  4. (First-time only) Set VITE_BUTLER_COFFEE_API_URL in Netlify env vars
  *
+ * SECURITY (set once in Apps Script → Project Settings → Script Properties):
+ *  ADMIN_EMAILS      comma-separated emails allowed to use the admin
+ *                    (must match their Firebase login), e.g. a@x.com, b@y.com
+ *  Public GET requests return only public fields of visible / published rows.
+ *  Every POST (save, delete, import, upload, translate, list) must carry the
+ *  admin's Firebase ID token as body.idToken; the token is checked with Google
+ *  and the email must be in ADMIN_EMAILS.
+ *  POST { action: 'list', sheet } returns the full data (costs, drafts…) for the admin.
+ *
  * ROUTING:
  *  GET  /exec                  → Coffee sheet
  *  GET  /exec?sheet=subs       → Subscription sheet
@@ -154,6 +163,68 @@ function jsonOut(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// ─── Security ─────────────────────────────────────────────────────────────────
+
+// Firebase Web API key of the admin's Firebase project. Not a secret (it ships
+// in the admin's JS); it only lets us ask Google to validate login tokens.
+const FIREBASE_API_KEY = 'AIzaSyAK80cx35lT-Qx0CjZ8-tFS7lqcycM_Y7g';
+
+// Fields never sent to the public website.
+const PRIVATE_FIELD_RE = /^(cost|margin|profit|provider|vat)/i;
+
+/**
+ * Verify a Firebase ID token and return the admin's email.
+ * Throws if the token is missing/invalid/expired or the email isn't allowed.
+ */
+function requireAdmin(idToken) {
+  if (!idToken) throw new AuthError('Not signed in.');
+
+  const allowed = String(PropertiesService.getScriptProperties().getProperty('ADMIN_EMAILS') || '')
+    .toLowerCase().split(/[\s,;]+/).filter(Boolean);
+  if (!allowed.length) throw new AuthError('Admin access is not set up: add ADMIN_EMAILS in Script Properties.');
+
+  const cache = CacheService.getScriptCache();
+  const key = 'adm_' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, idToken)).slice(0, 40);
+  let email = cache.get(key);
+
+  if (!email) {
+    const res = UrlFetchApp.fetch(
+      'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + FIREBASE_API_KEY, {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify({ idToken: idToken }),
+        muteHttpExceptions: true,
+      });
+    if (res.getResponseCode() !== 200) throw new AuthError('Your login has expired. Please sign in again.');
+    const user = (JSON.parse(res.getContentText()).users || [])[0];
+    email = user && user.email ? String(user.email).toLowerCase() : '';
+    if (!email) throw new AuthError('Not signed in.');
+    cache.put(key, email, 300); // 5 min
+  }
+
+  if (allowed.indexOf(email) === -1) throw new AuthError('This account is not allowed to edit the database.');
+  return email;
+}
+
+function AuthError(message) { this.message = message; this.name = 'AuthError'; }
+AuthError.prototype = Object.create(Error.prototype);
+
+/** Public view of rows: drop private fields and hidden / draft rows. */
+function toPublic(rows) {
+  return rows
+    .filter(function(r) {
+      if ('visible' in r && !(r.visible === true || r.visible === 'true')) return false;
+      if ('status' in r && r.status !== 'published') return false;
+      return true;
+    })
+    .map(function(r) {
+      const out = {};
+      Object.keys(r).forEach(function(k) { if (!PRIVATE_FIELD_RE.test(k)) out[k] = r[k]; });
+      return out;
+    });
+}
+
 /** Convert a sheet row array → app-friendly object */
 function rowToApp(row) {
   const bagRaw = String(row[C.BAG_SIZE] || '');
@@ -241,10 +312,23 @@ function getSheet() {
 
 function doGet(e) {
   try {
-    if (e && e.parameter && e.parameter.sheet === 'subs')     return doGetSubs();
-    if (e && e.parameter && e.parameter.sheet === 'machines') return doGetMachines();
-    if (e && e.parameter && e.parameter.sheet === 'blog')     return doGetBlog();
-    if (e && e.parameter && e.parameter.sheet === 'faq')      return doGetFaq();
+    return readSheet(e && e.parameter && e.parameter.sheet, false);
+  } catch (err) {
+    return jsonOut({ ok: false, error: err.message });
+  }
+}
+
+/** Read a sheet. full=false → public view; full=true → everything (admin only). */
+function readSheet(sheetName, full) {
+  if (sheetName === 'subs')     return doGetSubs(full);
+  if (sheetName === 'machines') return doGetMachines(full);
+  if (sheetName === 'blog')     return doGetBlog(full);
+  if (sheetName === 'faq')      return doGetFaq(full);
+  return doGetCoffees(full);
+}
+
+function doGetCoffees(full) {
+  try {
     const sheet = getSheet();
     const data  = sheet.getDataRange().getValues();
     const coffees = [];
@@ -259,7 +343,7 @@ function doGet(e) {
       coffees.push(rowToApp(row));
     }
 
-    return jsonOut({ ok: true, data: coffees });
+    return jsonOut({ ok: true, data: full ? coffees : toPublic(coffees) });
   } catch (err) {
     return jsonOut({ ok: false, error: err.message });
   }
@@ -270,6 +354,16 @@ function doGet(e) {
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
+
+    // Every write (and full read) requires a signed-in, allowed admin.
+    try {
+      requireAdmin(body.idToken);
+    } catch (authErr) {
+      return jsonOut({ ok: false, auth: true, error: authErr.message });
+    }
+
+    // Full read for the admin (includes costs, hidden rows and drafts)
+    if (body.action === 'list') return readSheet(body.sheet, true);
 
     // Route to FAQ handlers
     if (body.sheet === 'faq') {
@@ -579,7 +673,7 @@ function applyToRowSub(row, sub) {
 
 // ─── Subs doGet ───────────────────────────────────────────────────────────────
 
-function doGetSubs() {
+function doGetSubs(full) {
   const sheet = getSheetSubs();
   const data  = sheet.getDataRange().getValues();
   const subs  = [];
@@ -590,7 +684,7 @@ function doGetSubs() {
     if (String(row[SC.ID]).trim() === '' && String(row[SC.TITLE]).trim() === '') continue;
     subs.push(rowToAppSub(row));
   }
-  return jsonOut({ ok: true, data: subs });
+  return jsonOut({ ok: true, data: full ? subs : toPublic(subs) });
 }
 
 // ─── Subs Save ────────────────────────────────────────────────────────────────
@@ -912,7 +1006,7 @@ function doTranslateMachine(body) {
 
 // ─── Machines doGet ───────────────────────────────────────────────────────────
 
-function doGetMachines() {
+function doGetMachines(full) {
   const sheet    = getSheetMachines();
   const data     = sheet.getDataRange().getValues();
   const machines = [];
@@ -923,7 +1017,7 @@ function doGetMachines() {
     if (String(row[MC.ID]).trim() === '' && String(row[MC.NAME]).trim() === '') continue;
     machines.push(rowToAppMachine(row));
   }
-  return jsonOut({ ok: true, data: machines });
+  return jsonOut({ ok: true, data: full ? machines : toPublic(machines) });
 }
 
 // ─── Machines Save ────────────────────────────────────────────────────────────
@@ -1208,7 +1302,7 @@ function doTranslateBlog(body) {
 
 // ─── Blog doGet ───────────────────────────────────────────────────────────────
 
-function doGetBlog() {
+function doGetBlog(full) {
   const sheet = getSheetBlog();
   const data  = sheet.getDataRange().getValues();
   const posts = [];
@@ -1225,7 +1319,7 @@ function doGetBlog() {
     return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
   });
 
-  return jsonOut({ ok: true, data: posts });
+  return jsonOut({ ok: true, data: full ? posts : toPublic(posts) });
 }
 
 // ─── Blog Save (create or update) ─────────────────────────────────────────────
@@ -1331,7 +1425,7 @@ function applyToRowFaq(row, faq) {
 
 // ─── FAQ doGet ────────────────────────────────────────────────────────────────
 
-function doGetFaq() {
+function doGetFaq(full) {
   var sheet = getSheetFaq();
   var data  = sheet.getDataRange().getValues();
   var faqs  = [];
@@ -1347,7 +1441,7 @@ function doGetFaq() {
     return Number(a.sort_order || 999) - Number(b.sort_order || 999);
   });
 
-  return jsonOut({ ok: true, data: faqs });
+  return jsonOut({ ok: true, data: full ? faqs : toPublic(faqs) });
 }
 
 // ─── FAQ Save (create or update) ──────────────────────────────────────────────
@@ -1388,4 +1482,11 @@ function handleDeleteFaq(id) {
     }
   }
   return jsonOut({ ok: false, error: 'FAQ not found for id: ' + id });
+}
+
+// Run this once from the editor (▷ Run) to grant the permission the login
+// check needs ("Connect to an external service").
+function authorizeLoginCheck() {
+  UrlFetchApp.fetch('https://www.googleapis.com/discovery/v1/apis');
+  Logger.log('Login check permission granted.');
 }

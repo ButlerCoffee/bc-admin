@@ -1,3 +1,5 @@
+import { auth } from '../firebase.js';
+
 /**
  * Set VITE_BUTLER_COFFEE_API_URL in .env.local (dev) or in your Netlify
  * environment variables (production) to the /exec URL from your deployed
@@ -11,7 +13,7 @@ export const API_URL = import.meta.env.VITE_BUTLER_COFFEE_API_URL || '';
 /**
  * Call the Google Apps Script backend.
  *
- * @param {string} method   'GET' or 'POST'
+ * @param {string} method   'GET' (full read via action 'list') or 'POST'
  * @param {object} [body]   POST payload (plain object)
  * @param {string} [sheet]  Optional sheet name; appended as ?sheet=X on GET,
  *                          or merged into the POST body so the GAS router knows
@@ -27,18 +29,23 @@ export async function apiCall(method = 'GET', body, sheet) {
     );
   }
 
-  let url = API_URL;
-  if (method === 'GET' && sheet) {
-    url = `${API_URL}?sheet=${encodeURIComponent(sheet)}`;
-  }
+  // Every request is a POST carrying the admin's Firebase login token — the
+  // backend refuses writes (and full reads, which include costs and drafts)
+  // without it. Reads use { action: 'list' }; plain GET is the public view.
+  const url = API_URL;
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not signed in.');
+  let idToken = await user.getIdToken();
+  let refreshedToken = false;
 
-  const opts = { method, redirect: 'follow' };
-  if (body) {
+  const payloadBase = method === 'GET' ? { action: 'list' } : (body || {});
+  const buildOpts = () => ({
+    method: 'POST',
+    redirect: 'follow',
     // text/plain avoids a CORS preflight — Google Apps Script requires this
-    opts.headers = { 'Content-Type': 'text/plain' };
-    const payload = sheet ? { ...body, sheet } : body;
-    opts.body = JSON.stringify(payload);
-  }
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ ...payloadBase, ...(sheet ? { sheet } : {}), idToken }),
+  });
 
   // Apps Script web apps occasionally return a bare 503 (or the fetch itself
   // fails with a generic "Load failed"/"Failed to fetch") when the service is
@@ -50,13 +57,20 @@ export async function apiCall(method = 'GET', body, sheet) {
   let lastErr;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const res = await fetch(url, opts);
+      const res = await fetch(url, buildOpts());
       if (res.status === 503 || res.status === 429) {
         lastErr = new Error(`Server temporarily unavailable (${res.status})`);
         if (attempt < MAX_ATTEMPTS) { await sleep(attempt * 1000); continue; }
         throw lastErr;
       }
       const json = await res.json();
+      if (!json.ok && json.auth && !refreshedToken) {
+        // Token may have just expired — get a fresh one and retry once.
+        idToken = await user.getIdToken(true);
+        refreshedToken = true;
+        attempt--;
+        continue;
+      }
       if (!json.ok) throw new Error(json.error || 'API error');
       return json.data;
     } catch (err) {
