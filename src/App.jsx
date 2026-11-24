@@ -184,6 +184,14 @@ export default function App() {
           </div>
 
           <div className="nav-section">
+            {!sc && <div className="nav-section__label">Website</div>}
+            <NavLink to="/butlercoffee/settings" className={navClass} title="Site Settings">
+              <span className="nav-link__icon"><i className="fa-solid fa-sliders" /></span>
+              {!sc && <span>Site Settings</span>}
+            </NavLink>
+          </div>
+
+          <div className="nav-section">
             {!sc && <div className="nav-section__label">Tools</div>}
             <NavLink to="/butlercoffee/labels" className={navClass} title="Label Generator">
               <span className="nav-link__icon"><i className="fa-solid fa-tag" /></span>

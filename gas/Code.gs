@@ -25,6 +25,7 @@
  *  GET  /exec?sheet=subs       → Subscription sheet
  *  GET  /exec?sheet=machines   → Machines sheet
  *  GET  /exec?sheet=blog       → Blog sheet
+ *  GET  /exec?sheet=settings   → Site settings (object)
  *  POST /exec                  → Coffee   (body.sheet undefined)
  *  POST /exec                  → Subs     (body.sheet === 'subs')
  *  POST /exec                  → Machines (body.sheet === 'machines')
@@ -334,6 +335,7 @@ function readSheet(sheetName, full) {
   if (sheetName === 'machines') return doGetMachines(full);
   if (sheetName === 'blog')     return doGetBlog(full);
   if (sheetName === 'faq')      return doGetFaq(full);
+  if (sheetName === 'settings') return doGetSettings();
   return doGetCoffees(full);
 }
 
@@ -374,6 +376,12 @@ function doPostInner(e) {
 
     // Full read for the admin (includes costs, hidden rows and drafts)
     if (body.action === 'list') return readSheet(body.sheet, true);
+
+    // Route to Settings handlers
+    if (body.sheet === 'settings') {
+      if (body.action === 'save') return handleSaveSettings(body.settings);
+      return jsonOut({ ok: false, error: 'Unknown settings action: ' + body.action });
+    }
 
     // Route to FAQ handlers
     if (body.sheet === 'faq') {
@@ -1506,7 +1514,7 @@ function authorizeLoginCheck() {
 // rebuild the site so it picks the change up within about a minute.
 // The build hook URL lives in Script Properties as NETLIFY_BUILD_HOOK.
 
-const PUBLISH_SHEETS  = ['subs', 'machines', 'blog', 'faq'];
+const PUBLISH_SHEETS  = ['subs', 'machines', 'blog', 'faq', 'settings'];
 const PUBLISH_ACTIONS = ['save', 'delete', 'import'];
 
 function doPost(e) {
@@ -1532,4 +1540,70 @@ function triggerPublish() {
   cache.put('publish_lock', '1', 20);
   const res = UrlFetchApp.fetch(hook, { method: 'post', muteHttpExceptions: true });
   console.log('Auto-publish: Netlify build requested (' + res.getResponseCode() + ')');
+}
+
+// ─── Site settings ────────────────────────────────────────────────────────────
+// One "Settings" tab with key | value | updatedAt rows. Everything here is
+// public (shown on the website): contact email, Stripe portal link, company
+// details for the legal pages. The tab is created on first use.
+
+const SETTINGS_SHEET = 'Settings';
+const SETTINGS_DEFAULTS = {
+  contactEmail:   'hola@butler.coffee',
+  portalUrl:      '',
+  companyName:    'Butler Coffee SL',
+  companyAddress: '',
+  companyTaxId:   '',
+  legalUpdated:   '',
+};
+const SETTINGS_KEYS = Object.keys(SETTINGS_DEFAULTS);
+
+function getSheetSettings() {
+  const ss = SpreadsheetApp.openById(SS_ID);
+  let sh = ss.getSheetByName(SETTINGS_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(SETTINGS_SHEET);
+    sh.getRange('B:B').setNumberFormat('@'); // keep values as plain text (no date conversion)
+    const rows = [['key', 'value', 'updatedAt']].concat(SETTINGS_KEYS.map(function(k) { return [k, SETTINGS_DEFAULTS[k], '']; }));
+    sh.getRange(1, 1, rows.length, 3).setValues(rows);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function readSettings() {
+  const out = Object.assign({}, SETTINGS_DEFAULTS);
+  const data = getSheetSettings().getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    const key = String(data[i][0]).trim();
+    if (SETTINGS_KEYS.indexOf(key) !== -1) out[key] = String(data[i][1] == null ? '' : data[i][1]).trim();
+  }
+  return out;
+}
+
+function doGetSettings() {
+  return jsonOut({ ok: true, data: readSettings() });
+}
+
+function handleSaveSettings(settings) {
+  settings = settings || {};
+  if ('contactEmail' in settings && settings.contactEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(settings.contactEmail)) {
+    return jsonOut({ ok: false, error: 'Contact email does not look like an email address.' });
+  }
+  if ('portalUrl' in settings && settings.portalUrl && !/^https:\/\//.test(settings.portalUrl)) {
+    return jsonOut({ ok: false, error: 'Customer Portal link must start with https://' });
+  }
+  const sh = getSheetSettings();
+  sh.getRange('B:B').setNumberFormat('@');
+  const data = sh.getDataRange().getValues();
+  const now = new Date().toISOString();
+  SETTINGS_KEYS.forEach(function(key) {
+    if (!(key in settings)) return;
+    const value = String(settings[key] == null ? '' : settings[key]).trim();
+    let row = -1;
+    for (let i = 1; i < data.length; i++) { if (String(data[i][0]).trim() === key) { row = i + 1; break; } }
+    if (row === -1) { sh.appendRow([key, value, now]); data.push([key, value, now]); }
+    else sh.getRange(row, 2, 1, 2).setValues([[value, now]]);
+  });
+  return jsonOut({ ok: true, data: readSettings() });
 }
