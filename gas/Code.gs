@@ -17,6 +17,8 @@
  *  admin's Firebase ID token as body.idToken; the token is checked with Google
  *  and the email must be in ADMIN_EMAILS.
  *  POST { action: 'list', sheet } returns the full data (costs, drafts…) for the admin.
+ *  NETLIFY_BUILD_HOOK  Netlify build hook URL; successful saves/deletes/imports of
+ *                    subs, machines, blog or faq trigger a website rebuild.
  *
  * ROUTING:
  *  GET  /exec                  → Coffee sheet
@@ -359,7 +361,7 @@ function doGetCoffees(full) {
 
 // ─── doPost — save / delete / import ─────────────────────────────────────────
 
-function doPost(e) {
+function doPostInner(e) {
   try {
     const body = JSON.parse(e.postData.contents);
 
@@ -1497,4 +1499,37 @@ function handleDeleteFaq(id) {
 function authorizeLoginCheck() {
   UrlFetchApp.fetch('https://www.googleapis.com/discovery/v1/apis');
   Logger.log('Login check permission granted.');
+}
+
+// ─── Auto-publish ─────────────────────────────────────────────────────────────
+// After a successful change to content the website shows, ask Netlify to
+// rebuild the site so it picks the change up within about a minute.
+// The build hook URL lives in Script Properties as NETLIFY_BUILD_HOOK.
+
+const PUBLISH_SHEETS  = ['subs', 'machines', 'blog', 'faq'];
+const PUBLISH_ACTIONS = ['save', 'delete', 'import'];
+
+function doPost(e) {
+  const out = doPostInner(e);
+  try { maybePublish(e, out); } catch (err) { console.warn('Auto-publish failed: ' + err.message); }
+  return out;
+}
+
+function maybePublish(e, out) {
+  const body = JSON.parse(e.postData.contents);
+  if (PUBLISH_SHEETS.indexOf(body.sheet) === -1) return;
+  if (PUBLISH_ACTIONS.indexOf(body.action) === -1) return;
+  if (!JSON.parse(out.getContent()).ok) return;
+  triggerPublish();
+}
+
+/** Trigger a Netlify build, at most once every 20 seconds (bulk edits, double-saves). */
+function triggerPublish() {
+  const hook = PropertiesService.getScriptProperties().getProperty('NETLIFY_BUILD_HOOK');
+  if (!hook) return;
+  const cache = CacheService.getScriptCache();
+  if (cache.get('publish_lock')) return;
+  cache.put('publish_lock', '1', 20);
+  const res = UrlFetchApp.fetch(hook, { method: 'post', muteHttpExceptions: true });
+  console.log('Auto-publish: Netlify build requested (' + res.getResponseCode() + ')');
 }
