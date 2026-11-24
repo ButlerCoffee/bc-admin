@@ -177,7 +177,7 @@ const PRIVATE_FIELD_RE = /^(cost|margin|profit|provider|vat)/i;
  * Throws if the token is missing/invalid/expired or the email isn't allowed.
  */
 function requireAdmin(idToken) {
-  if (!idToken) throw new AuthError('Not signed in.');
+  if (!idToken) { console.warn('Admin check: request had no login token'); throw new AuthError('Not signed in.'); }
 
   const allowed = String(PropertiesService.getScriptProperties().getProperty('ADMIN_EMAILS') || '')
     .toLowerCase().split(/[\s,;]+/).filter(Boolean);
@@ -196,14 +196,22 @@ function requireAdmin(idToken) {
         payload: JSON.stringify({ idToken: idToken }),
         muteHttpExceptions: true,
       });
-    if (res.getResponseCode() !== 200) throw new AuthError('Your login has expired. Please sign in again.');
+    if (res.getResponseCode() !== 200) {
+      let reason = '';
+      try { reason = (JSON.parse(res.getContentText()).error || {}).message || ''; } catch (e) {}
+      console.warn('Admin check: Google rejected the token (' + res.getResponseCode() + ') ' + reason);
+      throw new AuthError('Your login could not be verified (' + (reason || res.getResponseCode()) + '). Please sign in again.');
+    }
     const user = (JSON.parse(res.getContentText()).users || [])[0];
     email = user && user.email ? String(user.email).toLowerCase() : '';
     if (!email) throw new AuthError('Not signed in.');
     cache.put(key, email, 300); // 5 min
   }
 
-  if (allowed.indexOf(email) === -1) throw new AuthError('This account is not allowed to edit the database.');
+  if (allowed.indexOf(email) === -1) {
+    console.warn('Admin check: ' + email + ' is not in ADMIN_EMAILS');
+    throw new AuthError('This account (' + email + ') is not allowed to edit the database.');
+  }
   return email;
 }
 
