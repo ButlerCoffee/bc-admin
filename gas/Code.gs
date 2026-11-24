@@ -26,6 +26,7 @@
  *  GET  /exec?sheet=machines   → Machines sheet
  *  GET  /exec?sheet=blog       → Blog sheet
  *  GET  /exec?sheet=settings   → Site settings (object)
+ *  GET  /exec?sheet=legal      → Legal pages (visible only)
  *  POST /exec                  → Coffee   (body.sheet undefined)
  *  POST /exec                  → Subs     (body.sheet === 'subs')
  *  POST /exec                  → Machines (body.sheet === 'machines')
@@ -336,6 +337,7 @@ function readSheet(sheetName, full) {
   if (sheetName === 'blog')     return doGetBlog(full);
   if (sheetName === 'faq')      return doGetFaq(full);
   if (sheetName === 'settings') return doGetSettings();
+  if (sheetName === 'legal')    return doGetLegal(full);
   return doGetCoffees(full);
 }
 
@@ -376,6 +378,14 @@ function doPostInner(e) {
 
     // Full read for the admin (includes costs, hidden rows and drafts)
     if (body.action === 'list') return readSheet(body.sheet, true);
+
+    // Route to Legal page handlers
+    if (body.sheet === 'legal') {
+      if (body.action === 'save')   return handleSaveLegal(body.page);
+      if (body.action === 'delete') return handleDeleteLegal(body.slug);
+      if (body.action === 'import') return handleImportLegal(body.pages);
+      return jsonOut({ ok: false, error: 'Unknown legal action: ' + body.action });
+    }
 
     // Route to Settings handlers
     if (body.sheet === 'settings') {
@@ -1514,7 +1524,7 @@ function authorizeLoginCheck() {
 // rebuild the site so it picks the change up within about a minute.
 // The build hook URL lives in Script Properties as NETLIFY_BUILD_HOOK.
 
-const PUBLISH_SHEETS  = ['subs', 'machines', 'blog', 'faq', 'settings'];
+const PUBLISH_SHEETS  = ['subs', 'machines', 'blog', 'faq', 'settings', 'legal'];
 const PUBLISH_ACTIONS = ['save', 'delete', 'import'];
 
 function doPost(e) {
@@ -1606,4 +1616,124 @@ function handleSaveSettings(settings) {
     else sh.getRange(row, 2, 1, 2).setValues([[value, now]]);
   });
   return jsonOut({ ok: true, data: readSettings() });
+}
+
+// ─── Legal pages ──────────────────────────────────────────────────────────────
+// One row per legal page in the "Legal" tab. Sections are stored as JSON:
+//   [{ heading: { en, es }, body: { en, es } }, …]
+// Text may use {company} {address} {taxId} {email} placeholders and [[optional]]
+// segments, filled in by the website from Site Settings.
+
+const LEGAL_SHEET = 'Legal';
+const LG_HEADERS = ['slug', 'sort_order', 'title_en', 'title_es', 'intro_en', 'intro_es', 'sections', 'lastUpdated', 'visible', 'updatedAt'];
+const LG = { SLUG: 0, ORDER: 1, TITLE_EN: 2, TITLE_ES: 3, INTRO_EN: 4, INTRO_ES: 5, SECTIONS: 6, UPDATED_LABEL: 7, VISIBLE: 8, UPDATED_AT: 9 };
+
+function getSheetLegal() {
+  const ss = SpreadsheetApp.openById(SS_ID);
+  let sh = ss.getSheetByName(LEGAL_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(LEGAL_SHEET);
+    sh.getRange(1, 1, sh.getMaxRows(), LG_HEADERS.length).setNumberFormat('@');
+    sh.getRange(1, 1, 1, LG_HEADERS.length).setValues([LG_HEADERS]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function rowToAppLegal(row) {
+  let sections = [];
+  try { sections = JSON.parse(row[LG.SECTIONS] || '[]'); } catch (e) { sections = []; }
+  return {
+    slug:        String(row[LG.SLUG] || '').trim(),
+    order:       Number(row[LG.ORDER]) || 0,
+    title:       { en: String(row[LG.TITLE_EN] || ''), es: String(row[LG.TITLE_ES] || '') },
+    intro:       { en: String(row[LG.INTRO_EN] || ''), es: String(row[LG.INTRO_ES] || '') },
+    sections:    Array.isArray(sections) ? sections : [],
+    lastUpdated: String(row[LG.UPDATED_LABEL] || ''),
+    visible:     !(row[LG.VISIBLE] === false || String(row[LG.VISIBLE]).toLowerCase() === 'false'),
+    updatedAt:   String(row[LG.UPDATED_AT] || ''),
+  };
+}
+
+function appToRowLegal(p) {
+  const t = p.title || {}, i = p.intro || {};
+  const sections = (Array.isArray(p.sections) ? p.sections : []).map(function(s) {
+    s = s || {};
+    return {
+      heading: { en: String((s.heading || {}).en || ''), es: String((s.heading || {}).es || '') },
+      body:    { en: String((s.body || {}).en || ''),    es: String((s.body || {}).es || '') },
+    };
+  });
+  return [
+    String(p.slug || '').trim(), String(Number(p.order) || 0),
+    String(t.en || ''), String(t.es || ''), String(i.en || ''), String(i.es || ''),
+    JSON.stringify(sections), String(p.lastUpdated || ''),
+    p.visible === false ? 'false' : 'true', new Date().toISOString(),
+  ];
+}
+
+function listLegal() {
+  const data = getSheetLegal().getDataRange().getValues();
+  const pages = [];
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][LG.SLUG]).trim() === '') continue;
+    pages.push(rowToAppLegal(data[i]));
+  }
+  pages.sort(function(a, b) { return a.order - b.order; });
+  return pages;
+}
+
+function doGetLegal(full) {
+  const pages = listLegal();
+  return jsonOut({ ok: true, data: full ? pages : toPublic(pages) });
+}
+
+function validateLegal(p) {
+  if (!p || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(String(p.slug || ''))) return 'The page address (slug) may only use lowercase letters, numbers and dashes.';
+  if (!p.title || !String(p.title.en || '').trim()) return 'The English title is required.';
+  return '';
+}
+
+function handleSaveLegal(page) {
+  const err = validateLegal(page);
+  if (err) return jsonOut({ ok: false, error: err });
+  const sh = getSheetLegal();
+  const data = sh.getDataRange().getValues();
+  const lookFor = String(page.originalSlug || page.slug).trim();
+  let row = -1;
+  for (let i = 1; i < data.length; i++) {
+    const s = String(data[i][LG.SLUG]).trim();
+    if (s === lookFor) row = i + 1;
+    else if (s === String(page.slug).trim()) return jsonOut({ ok: false, error: 'Another legal page already uses this address: ' + page.slug });
+  }
+  const values = appToRowLegal(page);
+  if (row === -1) sh.appendRow(values);
+  else sh.getRange(row, 1, 1, values.length).setValues([values]);
+  return jsonOut({ ok: true, data: rowToAppLegal(values) });
+}
+
+function handleDeleteLegal(slug) {
+  const sh = getSheetLegal();
+  const data = sh.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][LG.SLUG]).trim() === String(slug).trim()) {
+      sh.deleteRow(i + 1);
+      return jsonOut({ ok: true, data: { deleted: slug } });
+    }
+  }
+  return jsonOut({ ok: false, error: 'Legal page not found: ' + slug });
+}
+
+/** Load a full set of pages (first-time setup). Refuses if pages already exist. */
+function handleImportLegal(pages) {
+  if (!Array.isArray(pages) || !pages.length) return jsonOut({ ok: false, error: 'Nothing to import.' });
+  if (listLegal().length) return jsonOut({ ok: false, error: 'Legal pages already exist in the database.' });
+  for (let k = 0; k < pages.length; k++) {
+    const err = validateLegal(pages[k]);
+    if (err) return jsonOut({ ok: false, error: (pages[k].slug || 'page') + ': ' + err });
+  }
+  const sh = getSheetLegal();
+  const rows = pages.map(function(p, idx) { return appToRowLegal(Object.assign({ order: idx + 1 }, p)); });
+  sh.getRange(2, 1, rows.length, LG_HEADERS.length).setValues(rows);
+  return jsonOut({ ok: true, data: listLegal() });
 }

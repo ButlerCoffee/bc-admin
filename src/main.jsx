@@ -23,6 +23,7 @@ import LabelsPanel        from './LabelsPanel.jsx';
 import BlogPanel          from './BlogPanel.jsx';
 import FaqPanel           from './FaqPanel.jsx';
 import SettingsPanel      from './SettingsPanel.jsx';
+import LegalPanel         from './LegalPanel.jsx';
 import { CoffeeProvider } from './CoffeeContext.jsx';
 
 // ── Auth guard — redirects to login if not authenticated ──────────────────────
@@ -177,6 +178,7 @@ const router = createBrowserRouter([
 
           // Website settings (contact email, portal link, company details)
           { path: 'settings', element: <SettingsPanel /> },
+          { path: 'legal',    element: <LegalPanel /> },
         ],
       },
 

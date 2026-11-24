@@ -189,6 +189,10 @@ export default function App() {
               <span className="nav-link__icon"><i className="fa-solid fa-sliders" /></span>
               {!sc && <span>Site Settings</span>}
             </NavLink>
+            <NavLink to="/butlercoffee/legal" className={navClass} title="Legal Pages">
+              <span className="nav-link__icon"><i className="fa-solid fa-scale-balanced" /></span>
+              {!sc && <span>Legal Pages</span>}
+            </NavLink>
           </div>
 
           <div className="nav-section">
