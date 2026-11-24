@@ -9,7 +9,7 @@ export const LEGAL_DEFAULTS = [
       "en": "Privacy Policy",
       "es": "Política de Privacidad"
     },
-    "lastUpdated": "1 January 2025",
+    "lastUpdated": "24 November 2026",
     "intro": {
       "en": "{company} (\"Butler Coffee\", \"we\", \"us\", or \"our\") is committed to protecting your personal information and your right to privacy. This Privacy Policy explains how we collect, use, and share information about you when you use our website and services.",
       "es": "{company} (\"Butler Coffee\", \"nosotros\" o \"nuestro\") se compromete a proteger tu información personal y tu derecho a la privacidad. Esta Política de Privacidad explica cómo recopilamos, usamos y compartimos información sobre ti cuando utilizas nuestro sitio web y servicios."
@@ -21,8 +21,8 @@ export const LEGAL_DEFAULTS = [
           "es": "1. Información que recopilamos"
         },
         "body": {
-          "en": "We collect information you provide directly to us, such as when you create an account, subscribe to our coffee service, make a purchase, or contact us for support. This includes your name, email address, shipping address, phone number, and payment information. We also collect information automatically when you use our website, including your IP address, browser type, operating system, referring URLs, and pages viewed.",
-          "es": "Recopilamos información que nos proporcionas directamente, como cuando creas una cuenta, te suscribes a nuestro servicio de café, realizas una compra o nos contactas para obtener asistencia. Esto incluye tu nombre, dirección de correo electrónico, dirección de envío, número de teléfono e información de pago. También recopilamos información automáticamente cuando utilizas nuestro sitio web, como tu dirección IP, tipo de navegador, sistema operativo, URL de referencia y páginas visitadas."
+          "en": "We collect the information you give us directly: when you subscribe to our coffee service, buy from us, or contact us, for example through our contact form. This can include your name, email address, company, delivery address, phone number and the content of your message. Payments are handled by Stripe, so we never see or store your full card details. When you visit our website, our hosting provider automatically processes technical data such as your IP address and browser type in order to deliver the site securely.",
+          "es": "Recopilamos la información que nos facilitas directamente: cuando te suscribes a nuestro servicio de café, nos haces una compra o te pones en contacto con nosotros, por ejemplo a través de nuestro formulario de contacto. Puede incluir tu nombre, dirección de correo electrónico, empresa, dirección de entrega, número de teléfono y el contenido de tu mensaje. Los pagos los gestiona Stripe, por lo que nunca vemos ni almacenamos los datos completos de tu tarjeta. Cuando visitas nuestro sitio web, nuestro proveedor de alojamiento trata automáticamente datos técnicos, como tu dirección IP y tu tipo de navegador, para ofrecer el sitio de forma segura."
         }
       },
       {
@@ -31,14 +31,24 @@ export const LEGAL_DEFAULTS = [
           "es": "2. Cómo utilizamos tu información"
         },
         "body": {
-          "en": "We use the information we collect to process your orders and subscriptions, communicate with you about your account, send you marketing communications (where you have opted in), improve our products and services, comply with legal obligations, and prevent fraud.",
-          "es": "Utilizamos la información que recopilamos para procesar tus pedidos y suscripciones, comunicarnos contigo sobre tu cuenta, enviarte comunicaciones de marketing (cuando hayas dado tu consentimiento), mejorar nuestros productos y servicios, cumplir con las obligaciones legales y prevenir el fraude."
+          "en": "We use your information to process your orders and subscriptions, reply to your messages, communicate with you about your account, improve our products and services, comply with our legal obligations, and prevent fraud. We will only send you marketing emails if you have agreed to receive them, and you can unsubscribe at any time.",
+          "es": "Utilizamos tu información para procesar tus pedidos y suscripciones, responder a tus mensajes, comunicarnos contigo sobre tu cuenta de cliente, mejorar nuestros productos y servicios, cumplir con nuestras obligaciones legales y prevenir el fraude. Solo te enviaremos correos de marketing si has aceptado recibirlos, y puedes darte de baja en cualquier momento."
         }
       },
       {
         "heading": {
-          "en": "3. Data Retention",
-          "es": "3. Retención de datos"
+          "en": "3. Service Providers",
+          "es": "3. Proveedores de servicios"
+        },
+        "body": {
+          "en": "We use a small number of trusted providers to run our business: Stripe (payments and subscription billing), Netlify (website hosting and our contact form) and Google (the tools we use to keep our internal records). They process personal data only on our instructions and under their data protection terms. We do not sell your personal data.",
+          "es": "Trabajamos con un pequeño número de proveedores de confianza para gestionar nuestro negocio: Stripe (pagos y facturación de suscripciones), Netlify (alojamiento del sitio web y nuestro formulario de contacto) y Google (las herramientas que usamos para llevar nuestros registros internos). Solo tratan datos personales siguiendo nuestras instrucciones y conforme a sus condiciones de protección de datos. No vendemos tus datos personales."
+        }
+      },
+      {
+        "heading": {
+          "en": "4. Data Retention",
+          "es": "4. Retención de datos"
         },
         "body": {
           "en": "We retain your personal data for as long as necessary to provide our services and comply with our legal obligations. Subscription data is retained for the duration of your subscription plus 5 years for accounting and legal compliance. You may request deletion of your data at any time by contacting us at {email}.",
@@ -47,22 +57,22 @@ export const LEGAL_DEFAULTS = [
       },
       {
         "heading": {
-          "en": "4. Your Rights (GDPR)",
-          "es": "4. Tus derechos (RGPD)"
+          "en": "5. Your Rights (GDPR)",
+          "es": "5. Tus derechos (RGPD)"
         },
         "body": {
-          "en": "Under the General Data Protection Regulation (GDPR), you have the right to access, rectify, erase, restrict processing, and port your personal data. You also have the right to object to processing and to withdraw consent at any time. To exercise these rights, contact us at {email}.",
-          "es": "En virtud del Reglamento General de Protección de Datos (RGPD), tienes derecho a acceder, rectificar, suprimir, restringir el tratamiento y portar tus datos personales. También tienes derecho a oponerte al tratamiento y a retirar tu consentimiento en cualquier momento. Para ejercer estos derechos, contáctanos en {email}."
+          "en": "Under the General Data Protection Regulation (GDPR), you have the right to access, rectify, erase, restrict processing, and port your personal data. You also have the right to object to processing and to withdraw consent at any time. To exercise these rights, contact us at {email}. You also have the right to lodge a complaint with the Spanish Data Protection Agency (AEPD).",
+          "es": "En virtud del Reglamento General de Protección de Datos (RGPD), tienes derecho a acceder, rectificar, suprimir, restringir el tratamiento y portar tus datos personales. También tienes derecho a oponerte al tratamiento y a retirar tu consentimiento en cualquier momento. Para ejercer estos derechos, contáctanos en {email}. También tienes derecho a presentar una reclamación ante la Agencia Española de Protección de Datos (AEPD)."
         }
       },
       {
         "heading": {
-          "en": "5. Contact",
-          "es": "5. Contacto"
+          "en": "6. Contact",
+          "es": "6. Contacto"
         },
         "body": {
-          "en": "If you have any questions about this Privacy Policy or our data practices, please contact our Data Protection Officer at: {company}[[, {address}]]. Email: {email}",
-          "es": "Si tienes alguna pregunta sobre esta Política de Privacidad o nuestras prácticas de datos, contacta con nuestro Responsable de Protección de Datos en: {company}[[, {address}]]. Email: {email}"
+          "en": "If you have any questions about this Privacy Policy or how we handle your data, please contact us: {company}[[, {address}]]. Email: {email}",
+          "es": "Si tienes alguna pregunta sobre esta Política de Privacidad o sobre cómo tratamos tus datos, contáctanos: {company}[[, {address}]]. Email: {email}"
         }
       }
     ],
@@ -75,10 +85,10 @@ export const LEGAL_DEFAULTS = [
       "en": "Cookie Policy",
       "es": "Política de Cookies"
     },
-    "lastUpdated": "1 January 2025",
+    "lastUpdated": "24 November 2026",
     "intro": {
-      "en": "This Cookie Policy explains how {company} uses cookies and similar tracking technologies when you visit our website. By continuing to use our site, you consent to our use of cookies as described in this policy.",
-      "es": "Esta Política de Cookies explica cómo {company} utiliza cookies y tecnologías de seguimiento similares cuando visitas nuestro sitio web. Al seguir utilizando nuestro sitio, aceptas el uso de cookies tal como se describe en esta política."
+      "en": "This Cookie Policy explains how {company} uses cookies and similar technologies on our website. In short: we keep it minimal and we do not use advertising or analytics cookies.",
+      "es": "Esta Política de Cookies explica cómo {company} utiliza cookies y tecnologías similares en nuestro sitio web. En resumen: lo mínimo posible, y no utilizamos cookies publicitarias ni analíticas."
     },
     "sections": [
       {
@@ -93,22 +103,22 @@ export const LEGAL_DEFAULTS = [
       },
       {
         "heading": {
-          "en": "Essential Cookies",
-          "es": "Cookies esenciales"
+          "en": "What We Use",
+          "es": "Qué utilizamos"
         },
         "body": {
-          "en": "These cookies are necessary for our website to function and cannot be switched off. They are usually only set in response to actions made by you such as setting your language preference, logging in, or adding items to your cart.",
-          "es": "Estas cookies son necesarias para que nuestro sitio web funcione y no se pueden desactivar. Normalmente solo se configuran en respuesta a acciones realizadas por ti, como establecer tu preferencia de idioma, iniciar sesión o añadir artículos a tu carrito."
+          "en": "We store a single preference in your browser: your language choice (English or Spanish), so the site remembers it on your next visit. It is kept in your browser's local storage, is not shared with anyone, and is only used for the feature you asked for. Our website may also save its own files in your browser so pages load faster; these contain no personal information.",
+          "es": "Guardamos una sola preferencia en tu navegador: el idioma que eliges (inglés o español), para que el sitio lo recuerde en tu próxima visita. Se guarda en el almacenamiento local de tu navegador, no se comparte con nadie y solo se usa para la función que has elegido. Nuestro sitio web también puede guardar sus propios archivos en tu navegador para que las páginas carguen más rápido; no contienen información personal."
         }
       },
       {
         "heading": {
-          "en": "Analytics Cookies",
-          "es": "Cookies analíticas"
+          "en": "Third-Party Services",
+          "es": "Servicios de terceros"
         },
         "body": {
-          "en": "We use analytics cookies to understand how visitors interact with our website. This helps us improve our site and services. These cookies collect information in an aggregate form and do not identify individual visitors. We use these only with your consent.",
-          "es": "Utilizamos cookies analíticas para entender cómo los visitantes interactúan con nuestro sitio web. Esto nos ayuda a mejorar nuestro sitio y servicios. Estas cookies recopilan información de forma agregada y no identifican a visitantes individuales. Solo las utilizamos con tu consentimiento."
+          "en": "Our website loads its fonts from Google Fonts, which means your browser connects to Google's servers and shares your IP address with Google. When you start a subscription or pay, you are taken to Stripe's secure checkout, which uses its own cookies under Stripe's own policies.",
+          "es": "Nuestro sitio web carga sus fuentes desde Google Fonts, por lo que tu navegador se conecta a los servidores de Google y comparte tu dirección IP con Google. Cuando inicias una suscripción o realizas un pago, pasas a la página de pago segura de Stripe, que utiliza sus propias cookies conforme a sus propias políticas."
         }
       },
       {
@@ -117,8 +127,8 @@ export const LEGAL_DEFAULTS = [
           "es": "Gestión de cookies"
         },
         "body": {
-          "en": "You can control cookies through your browser settings. Note that disabling certain cookies may affect the functionality of our website. To opt out of analytics cookies, you can use our cookie preference centre. For more information on managing cookies, visit aboutcookies.org.",
-          "es": "Puedes controlar las cookies a través de la configuración de tu navegador. Ten en cuenta que deshabilitar ciertas cookies puede afectar la funcionalidad de nuestro sitio web. Para desactivar las cookies analíticas, puedes usar nuestro centro de preferencias de cookies. Para más información sobre la gestión de cookies, visita aboutcookies.org."
+          "en": "You can clear your browser's stored data or block cookies at any time in your browser settings. If we ever add analytics or other non-essential cookies, we will ask for your consent first and update this policy.",
+          "es": "Puedes borrar los datos guardados en tu navegador o bloquear las cookies en cualquier momento desde la configuración de tu navegador. Si algún día añadimos cookies analíticas u otras no esenciales, te pediremos tu consentimiento antes y actualizaremos esta política."
         }
       }
     ],
@@ -131,7 +141,7 @@ export const LEGAL_DEFAULTS = [
       "en": "Shipping & Returns",
       "es": "Envíos y Devoluciones"
     },
-    "lastUpdated": "1 January 2025",
+    "lastUpdated": "24 November 2026",
     "intro": {
       "en": "We want you to love your coffee. Here's everything you need to know about how we ship your subscription and what to do if something isn't right.",
       "es": "Queremos que te encante tu café. Aquí tienes todo lo que necesitas saber sobre cómo enviamos tu suscripción y qué hacer si algo no está bien."
@@ -143,8 +153,8 @@ export const LEGAL_DEFAULTS = [
           "es": "Zonas de envío"
         },
         "body": {
-          "en": "We currently ship to mainland Spain, Portugal, and Andorra from our base in Madrid. We dispatch all orders via Correos or equivalent courier. We are working on expanding our shipping zones — sign up to our newsletter to be notified.",
-          "es": "Actualmente enviamos a España peninsular, Portugal y Andorra desde nuestra base en Madrid. Tramitamos todos los pedidos a través de Correos o mensajero equivalente. Estamos trabajando para ampliar nuestras zonas de envío: suscríbete a nuestra newsletter para enterarte."
+          "en": "We currently ship to mainland Spain, Portugal, and Andorra from our base in Madrid. We dispatch all orders via Correos or equivalent courier. We are working on expanding our shipping zones.",
+          "es": "Actualmente enviamos a España peninsular, Portugal y Andorra desde nuestra base en Madrid. Tramitamos todos los pedidos a través de Correos o mensajero equivalente. Estamos trabajando para ampliar nuestras zonas de envío."
         }
       },
       {
