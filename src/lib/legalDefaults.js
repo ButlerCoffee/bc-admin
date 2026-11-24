@@ -163,8 +163,8 @@ export const LEGAL_DEFAULTS = [
           "es": "Costes de envío"
         },
         "body": {
-          "en": "Shipping is free on all orders over €30. For orders below €30, a flat shipping fee of €3.50 applies. Coffee machines and equipment orders are quoted separately and typically include white-glove delivery and setup.",
-          "es": "El envío es gratuito en todos los pedidos superiores a 30€. Para pedidos inferiores a 30€, se aplica una tarifa plana de envío de 3,50€. Los pedidos de máquinas y equipos de café se presupuestan por separado y normalmente incluyen entrega e instalación."
+          "en": "Shipping is free on all orders of €30 or more. For orders under €30, a flat shipping fee of €5 applies. Coffee machines and equipment orders are quoted separately and typically include white-glove delivery and setup.",
+          "es": "El envío es gratuito en todos los pedidos de 30€ o más. Para pedidos inferiores a 30€, se aplica una tarifa plana de envío de 5€. Los pedidos de máquinas y equipos de café se presupuestan por separado y normalmente incluyen entrega e instalación."
         }
       },
       {
