@@ -28,6 +28,7 @@
  *  GET  /exec?sheet=settings   → Site settings (object)
  *  GET  /exec?sheet=legal      → Legal pages (visible only)
  *  GET  /exec?sheet=products   → Store products (visible only, no cost)
+ *  GET  /exec?sheet=logos      → "Trusted by" client logos (visible only)
  *  POST /exec                  → Coffee   (body.sheet undefined)
  *  POST /exec                  → Subs     (body.sheet === 'subs')
  *  POST /exec                  → Machines (body.sheet === 'machines')
@@ -340,6 +341,7 @@ function readSheet(sheetName, full) {
   if (sheetName === 'settings') return doGetSettings();
   if (sheetName === 'legal')    return doGetLegal(full);
   if (sheetName === 'products') return doGetProducts(full);
+  if (sheetName === 'logos')    return doGetLogos(full);
   return doGetCoffees(full);
 }
 
@@ -395,6 +397,15 @@ function doPostInner(e) {
       if (body.action === 'delete')      return handleDeleteProduct(body.slug);
       if (body.action === 'uploadImage') return handleUploadImage(body.filename, body.mimeType, body.data, 'Butler Product Images', 'w1200');
       return jsonOut({ ok: false, error: 'Unknown products action: ' + body.action });
+    }
+
+    // Route to client logo handlers
+    if (body.sheet === 'logos') {
+      if (body.action === 'save')        return handleSaveLogo(body.logo);
+      if (body.action === 'delete')      return handleDeleteLogo(body.id);
+      if (body.action === 'import')      return handleImportLogos(body.logos);
+      if (body.action === 'uploadImage') return handleUploadImage(body.filename, body.mimeType, body.data, 'Butler Logo Images', 'w600');
+      return jsonOut({ ok: false, error: 'Unknown logos action: ' + body.action });
     }
 
     // Route to Settings handlers
@@ -1534,7 +1545,7 @@ function authorizeLoginCheck() {
 // rebuild the site so it picks the change up within about a minute.
 // The build hook URL lives in Script Properties as NETLIFY_BUILD_HOOK.
 
-const PUBLISH_SHEETS  = ['subs', 'machines', 'blog', 'faq', 'settings', 'legal', 'products'];
+const PUBLISH_SHEETS  = ['subs', 'machines', 'blog', 'faq', 'settings', 'legal', 'products', 'logos'];
 const PUBLISH_ACTIONS = ['save', 'delete', 'import'];
 
 function doPost(e) {
@@ -1868,4 +1879,117 @@ function handleDeleteProduct(slug) {
     }
   }
   return jsonOut({ ok: false, error: 'Product not found: ' + slug });
+}
+
+// ─── Client logos ("Trusted by" band) ─────────────────────────────────────────
+// One row per company in the "Logos" tab: white logo image, alt text (EN/ES),
+// optional link to the company's website, order and visibility.
+
+const LOGOS_SHEET = 'Logos';
+const LO_HEADERS = ['id', 'name', 'image', 'alt_en', 'alt_es', 'link', 'sort_order', 'visible', 'updatedAt'];
+
+function getSheetLogos() {
+  const ss = SpreadsheetApp.openById(SS_ID);
+  let sh = ss.getSheetByName(LOGOS_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(LOGOS_SHEET);
+    sh.getRange(1, 1, sh.getMaxRows(), LO_HEADERS.length).setNumberFormat('@');
+    sh.getRange(1, 1, 1, LO_HEADERS.length).setValues([LO_HEADERS]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function rowToAppLogo(row) {
+  const v = function(name) { return row[LO_HEADERS.indexOf(name)]; };
+  return {
+    id:        String(v('id') || '').trim(),
+    name:      String(v('name') || ''),
+    image:     String(v('image') || ''),
+    alt:       { en: String(v('alt_en') || ''), es: String(v('alt_es') || '') },
+    link:      String(v('link') || ''),
+    order:     Number(v('sort_order')) || 0,
+    visible:   !(v('visible') === false || String(v('visible')).toLowerCase() === 'false'),
+    updatedAt: String(v('updatedAt') || ''),
+  };
+}
+
+function appToRowLogo(l) {
+  const alt = l.alt || {};
+  const values = {
+    id: String(l.id || '').trim(), name: String(l.name || '').trim(), image: String(l.image || '').trim(),
+    alt_en: String(alt.en || ''), alt_es: String(alt.es || ''), link: String(l.link || '').trim(),
+    sort_order: String(Number(l.order) || 0), visible: l.visible === false ? 'false' : 'true',
+    updatedAt: new Date().toISOString(),
+  };
+  return LO_HEADERS.map(function(h) { return values[h]; });
+}
+
+function listLogos() {
+  const data = getSheetLogos().getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === '') continue;
+    out.push(rowToAppLogo(data[i]));
+  }
+  out.sort(function(a, b) { return a.order - b.order; });
+  return out;
+}
+
+function doGetLogos(full) {
+  const items = listLogos();
+  return jsonOut({ ok: true, data: full ? items : toPublic(items) });
+}
+
+function validateLogo(l) {
+  if (!l || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(String(l.id || ''))) return 'The logo id may only use lowercase letters, numbers and dashes.';
+  if (!String(l.name || '').trim()) return 'The company name is required.';
+  if (!String(l.image || '').trim()) return 'Add a logo image (upload one or paste a link).';
+  if (l.link && !/^https?:\/\//.test(String(l.link).trim())) return 'The link must start with https:// (or http://).';
+  return '';
+}
+
+function handleSaveLogo(logo) {
+  const err = validateLogo(logo);
+  if (err) return jsonOut({ ok: false, error: err });
+  const sh = getSheetLogos();
+  sh.getRange(1, 1, sh.getMaxRows(), LO_HEADERS.length).setNumberFormat('@');
+  const data = sh.getDataRange().getValues();
+  const lookFor = String(logo.originalId || logo.id).trim();
+  let row = -1;
+  for (let i = 1; i < data.length; i++) {
+    const s = String(data[i][0]).trim();
+    if (s === lookFor) row = i + 1;
+    else if (s === String(logo.id).trim()) return jsonOut({ ok: false, error: 'Another logo already uses this id: ' + logo.id });
+  }
+  const values = appToRowLogo(logo);
+  if (row === -1) sh.appendRow(values);
+  else sh.getRange(row, 1, 1, values.length).setValues([values]);
+  return jsonOut({ ok: true, data: rowToAppLogo(values) });
+}
+
+function handleDeleteLogo(id) {
+  const sh = getSheetLogos();
+  const data = sh.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(id).trim()) {
+      sh.deleteRow(i + 1);
+      return jsonOut({ ok: true, data: { deleted: id } });
+    }
+  }
+  return jsonOut({ ok: false, error: 'Logo not found: ' + id });
+}
+
+/** First-time setup: load the logos currently on the website. Refuses if logos already exist. */
+function handleImportLogos(logos) {
+  if (!Array.isArray(logos) || !logos.length) return jsonOut({ ok: false, error: 'Nothing to import.' });
+  if (listLogos().length) return jsonOut({ ok: false, error: 'Logos already exist in the database.' });
+  for (let k = 0; k < logos.length; k++) {
+    const err = validateLogo(logos[k]);
+    if (err) return jsonOut({ ok: false, error: (logos[k].name || 'logo') + ': ' + err });
+  }
+  const sh = getSheetLogos();
+  const rows = logos.map(function(l, idx) { return appToRowLogo(Object.assign({ order: idx + 1 }, l)); });
+  sh.getRange(2, 1, rows.length, LO_HEADERS.length).setValues(rows);
+  return jsonOut({ ok: true, data: listLogos() });
 }

@@ -25,6 +25,7 @@ import FaqPanel           from './FaqPanel.jsx';
 import SettingsPanel      from './SettingsPanel.jsx';
 import LegalPanel         from './LegalPanel.jsx';
 import ProductsPanel      from './ProductsPanel.jsx';
+import LogosPanel         from './LogosPanel.jsx';
 import { CoffeeProvider } from './CoffeeContext.jsx';
 
 // ── Auth guard — redirects to login if not authenticated ──────────────────────
@@ -181,6 +182,7 @@ const router = createBrowserRouter([
           { path: 'settings', element: <SettingsPanel /> },
           { path: 'legal',    element: <LegalPanel /> },
           { path: 'products', element: <ProductsPanel /> },
+          { path: 'logos',    element: <LogosPanel /> },
         ],
       },
 

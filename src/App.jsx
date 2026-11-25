@@ -197,6 +197,10 @@ export default function App() {
               <span className="nav-link__icon"><i className="fa-solid fa-scale-balanced" /></span>
               {!sc && <span>Legal Pages</span>}
             </NavLink>
+            <NavLink to="/butlercoffee/logos" className={navClass} title="Client Logos">
+              <span className="nav-link__icon"><i className="fa-solid fa-building" /></span>
+              {!sc && <span>Client Logos</span>}
+            </NavLink>
           </div>
 
           <div className="nav-section">
