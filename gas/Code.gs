@@ -27,6 +27,7 @@
  *  GET  /exec?sheet=blog       → Blog sheet
  *  GET  /exec?sheet=settings   → Site settings (object)
  *  GET  /exec?sheet=legal      → Legal pages (visible only)
+ *  GET  /exec?sheet=products   → Store products (visible only, no cost)
  *  POST /exec                  → Coffee   (body.sheet undefined)
  *  POST /exec                  → Subs     (body.sheet === 'subs')
  *  POST /exec                  → Machines (body.sheet === 'machines')
@@ -338,6 +339,7 @@ function readSheet(sheetName, full) {
   if (sheetName === 'faq')      return doGetFaq(full);
   if (sheetName === 'settings') return doGetSettings();
   if (sheetName === 'legal')    return doGetLegal(full);
+  if (sheetName === 'products') return doGetProducts(full);
   return doGetCoffees(full);
 }
 
@@ -385,6 +387,14 @@ function doPostInner(e) {
       if (body.action === 'delete') return handleDeleteLegal(body.slug);
       if (body.action === 'import') return handleImportLegal(body.pages);
       return jsonOut({ ok: false, error: 'Unknown legal action: ' + body.action });
+    }
+
+    // Route to Store product handlers
+    if (body.sheet === 'products') {
+      if (body.action === 'save')        return handleSaveProduct(body.product);
+      if (body.action === 'delete')      return handleDeleteProduct(body.slug);
+      if (body.action === 'uploadImage') return handleUploadImage(body.filename, body.mimeType, body.data, 'Butler Product Images', 'w1200');
+      return jsonOut({ ok: false, error: 'Unknown products action: ' + body.action });
     }
 
     // Route to Settings handlers
@@ -1524,7 +1534,7 @@ function authorizeLoginCheck() {
 // rebuild the site so it picks the change up within about a minute.
 // The build hook URL lives in Script Properties as NETLIFY_BUILD_HOOK.
 
-const PUBLISH_SHEETS  = ['subs', 'machines', 'blog', 'faq', 'settings', 'legal'];
+const PUBLISH_SHEETS  = ['subs', 'machines', 'blog', 'faq', 'settings', 'legal', 'products'];
 const PUBLISH_ACTIONS = ['save', 'delete', 'import'];
 
 function doPost(e) {
@@ -1736,4 +1746,126 @@ function handleImportLegal(pages) {
   const rows = pages.map(function(p, idx) { return appToRowLegal(Object.assign({ order: idx + 1 }, p)); });
   sh.getRange(2, 1, rows.length, LG_HEADERS.length).setValues(rows);
   return jsonOut({ ok: true, data: listLegal() });
+}
+
+// ─── Store products ───────────────────────────────────────────────────────────
+// One row per product in the "Products" tab (special coffees, goods). Machines
+// stay in their own tab. The website checkout reads price from here (server
+// side), so a saved price is what customers pay. `cost` never leaves the admin.
+
+const PRODUCTS_SHEET = 'Products';
+const PR_HEADERS = ['slug', 'category', 'sort_order', 'name_en', 'name_es', 'tagline_en', 'tagline_es',
+  'description_en', 'description_es', 'price', 'size', 'grind', 'images', 'badge_en', 'badge_es',
+  'sold_out', 'visible', 'cost', 'updatedAt'];
+const PR_CATEGORIES = ['coffee', 'goods'];
+
+function getSheetProducts() {
+  const ss = SpreadsheetApp.openById(SS_ID);
+  let sh = ss.getSheetByName(PRODUCTS_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(PRODUCTS_SHEET);
+    sh.getRange(1, 1, sh.getMaxRows(), PR_HEADERS.length).setNumberFormat('@');
+    sh.getRange(1, 1, 1, PR_HEADERS.length).setValues([PR_HEADERS]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function rowToAppProduct(row) {
+  const v = function(name) { return row[PR_HEADERS.indexOf(name)]; };
+  const bool = function(x) { return x === true || String(x).toLowerCase() === 'true'; };
+  let images = [];
+  try { images = JSON.parse(v('images') || '[]'); } catch (e) { images = String(v('images') || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean); }
+  return {
+    slug:        String(v('slug') || '').trim(),
+    category:    String(v('category') || 'coffee'),
+    order:       Number(v('sort_order')) || 0,
+    name:        { en: String(v('name_en') || ''), es: String(v('name_es') || '') },
+    tagline:     { en: String(v('tagline_en') || ''), es: String(v('tagline_es') || '') },
+    description: { en: String(v('description_en') || ''), es: String(v('description_es') || '') },
+    price:       Number(v('price')) || 0,
+    size:        String(v('size') || ''),
+    grind:       bool(v('grind')),
+    images:      Array.isArray(images) ? images : [],
+    badge:       { en: String(v('badge_en') || ''), es: String(v('badge_es') || '') },
+    soldOut:     bool(v('sold_out')),
+    visible:     bool(v('visible')),
+    cost:        v('cost') === '' || v('cost') == null ? '' : Number(v('cost')),
+    updatedAt:   String(v('updatedAt') || ''),
+  };
+}
+
+function appToRowProduct(p) {
+  const L = function(o, k) { return String(((o || {})[k]) || ''); };
+  const images = (Array.isArray(p.images) ? p.images : []).map(String).filter(Boolean).slice(0, 6);
+  const values = {
+    slug: String(p.slug || '').trim(), category: PR_CATEGORIES.indexOf(p.category) === -1 ? 'coffee' : p.category,
+    sort_order: String(Number(p.order) || 0),
+    name_en: L(p.name, 'en'), name_es: L(p.name, 'es'),
+    tagline_en: L(p.tagline, 'en'), tagline_es: L(p.tagline, 'es'),
+    description_en: L(p.description, 'en'), description_es: L(p.description, 'es'),
+    price: String(Math.round((Number(p.price) || 0) * 100) / 100), size: String(p.size || '').trim(),
+    grind: p.grind ? 'true' : 'false', images: JSON.stringify(images),
+    badge_en: L(p.badge, 'en'), badge_es: L(p.badge, 'es'),
+    sold_out: p.soldOut ? 'true' : 'false', visible: p.visible ? 'true' : 'false',
+    cost: p.cost === '' || p.cost == null ? '' : String(Number(p.cost) || 0),
+    updatedAt: new Date().toISOString(),
+  };
+  return PR_HEADERS.map(function(h) { return values[h]; });
+}
+
+function listProducts() {
+  const data = getSheetProducts().getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === '') continue;
+    out.push(rowToAppProduct(data[i]));
+  }
+  out.sort(function(a, b) { return a.order - b.order; });
+  return out;
+}
+
+function doGetProducts(full) {
+  const items = listProducts();
+  return jsonOut({ ok: true, data: full ? items : toPublic(items) });
+}
+
+function validateProduct(p) {
+  if (!p || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(String(p.slug || ''))) return 'The product address (slug) may only use lowercase letters, numbers and dashes.';
+  if (String(p.slug).length > 60) return 'The product address (slug) is too long (60 characters max).';
+  if (!p.name || !String(p.name.en || '').trim()) return 'The English name is required.';
+  const price = Number(p.price);
+  if (!(price > 0) || price > 5000) return 'Price must be a number between 0 and 5000 (euros, VAT included).';
+  return '';
+}
+
+function handleSaveProduct(product) {
+  const err = validateProduct(product);
+  if (err) return jsonOut({ ok: false, error: err });
+  const sh = getSheetProducts();
+  sh.getRange(1, 1, sh.getMaxRows(), PR_HEADERS.length).setNumberFormat('@');
+  const data = sh.getDataRange().getValues();
+  const lookFor = String(product.originalSlug || product.slug).trim();
+  let row = -1;
+  for (let i = 1; i < data.length; i++) {
+    const s = String(data[i][0]).trim();
+    if (s === lookFor) row = i + 1;
+    else if (s === String(product.slug).trim()) return jsonOut({ ok: false, error: 'Another product already uses this address: ' + product.slug });
+  }
+  const values = appToRowProduct(product);
+  if (row === -1) sh.appendRow(values);
+  else sh.getRange(row, 1, 1, values.length).setValues([values]);
+  return jsonOut({ ok: true, data: rowToAppProduct(values) });
+}
+
+function handleDeleteProduct(slug) {
+  const sh = getSheetProducts();
+  const data = sh.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(slug).trim()) {
+      sh.deleteRow(i + 1);
+      return jsonOut({ ok: true, data: { deleted: slug } });
+    }
+  }
+  return jsonOut({ ok: false, error: 'Product not found: ' + slug });
 }

@@ -173,6 +173,10 @@ export default function App() {
               <span className="nav-link__icon"><i className="fa-solid fa-gears" /></span>
               {!sc && <span>Machines</span>}
             </NavLink>
+            <NavLink to="/butlercoffee/products" className={navClass} title="Store Products">
+              <span className="nav-link__icon"><i className="fa-solid fa-bag-shopping" /></span>
+              {!sc && <span>Store Products</span>}
+            </NavLink>
             <NavLink to="/butlercoffee/blog" className={navClass} title="Blog">
               <span className="nav-link__icon"><i className="fa-solid fa-pen-nib" /></span>
               {!sc && <span>Blog</span>}
